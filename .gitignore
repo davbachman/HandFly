@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+dist/
+coverage/
+.vite/
+output/
+progress.local.md
+

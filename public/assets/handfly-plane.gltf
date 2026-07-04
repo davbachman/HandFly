@@ -1,0 +1,245 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "HandFly procedural asset"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "HandFlyPlane",
+      "children": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "name": "fuselage",
+      "mesh": 0
+    },
+    {
+      "name": "wings",
+      "mesh": 1
+    },
+    {
+      "name": "tailplane",
+      "mesh": 2
+    },
+    {
+      "name": "canopy",
+      "mesh": 3
+    }
+  ],
+  "meshes": [
+    {
+      "name": "fuselage",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "material": 0
+        }
+      ]
+    },
+    {
+      "name": "wings",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 1
+          },
+          "material": 1
+        }
+      ]
+    },
+    {
+      "name": "tailplane",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 2
+          },
+          "material": 2
+        }
+      ]
+    },
+    {
+      "name": "canopy",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 3
+          },
+          "material": 3
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "Fuselage red",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.9,
+          0.08,
+          0.06,
+          1
+        ],
+        "metallicFactor": 0.1,
+        "roughnessFactor": 0.42
+      }
+    },
+    {
+      "name": "Wing white",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.92,
+          0.96,
+          1,
+          1
+        ],
+        "metallicFactor": 0.05,
+        "roughnessFactor": 0.38
+      }
+    },
+    {
+      "name": "Tail navy",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.05,
+          0.14,
+          0.28,
+          1
+        ],
+        "metallicFactor": 0.05,
+        "roughnessFactor": 0.4
+      }
+    },
+    {
+      "name": "Canopy glass",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.25,
+          0.72,
+          0.95,
+          0.72
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 0.08
+      },
+      "alphaMode": "BLEND"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "data:application/octet-stream;base64,AAAAAM3MTD2ambnAzcwMvzMzs77NzMy/AAAAAI/C9T7NzMy/AAAAAM3MTD2ambnAAAAAAI/C9T7NzMy/zcwMPzMzs77NzMy/AAAAAM3MTD2ambnAzcwMPzMzs77NzMy/zcwMvzMzs77NzMy/zcwMvzMzs77NzMy/MzOzvilcj76amXlAAAAAAHsUrj6amXlAzcwMvzMzs77NzMy/AAAAAHsUrj6amXlAAAAAAI/C9T7NzMy/zcwMPzMzs77NzMy/AAAAAI/C9T7NzMy/AAAAAHsUrj6amXlAzcwMPzMzs77NzMy/AAAAAHsUrj6amXlAMzOzPilcj76amXlAzcwMvzMzs77NzMy/zcwMPzMzs77NzMy/MzOzPilcj76amXlAzcwMvzMzs77NzMy/MzOzPilcj76amXlAMzOzvilcj76amXlAMzOzvilcj76amXlAMzOzPilcj76amXlAAAAAAHsUrj6amXlAMzOTwArXo71mZia/MzOTQArXo71mZia/AACAQArXo73NzKw/MzOTwArXo71mZia/AACAQArXo73NzKw/AACAwArXo73NzKw/zczMv83MTD0AAEBAzczMP83MTD0AAEBAAACgP83MTD3NzIRAzczMv83MTD0AAEBAAACgP83MTD3NzIRAAACgv83MTD3NzIRAAAAAAJqZGT6amUlAAAAAAJqZuT8AAIBAAAAAAJqZGT7NzIRAKVyPvpqZmT4AAADAKVyPPpqZmT4AAADAKVyPPoXrUT8AAADAKVyPvpqZmT4AAADAKVyPPoXrUT8AAADAKVyPvoXrUT8AAADAKVyPPpqZmT5mZma/KVyPvpqZmT5mZma/KVyPvoXrUT9mZma/KVyPPpqZmT5mZma/KVyPvoXrUT9mZma/KVyPPoXrUT9mZma/KVyPvpqZmT5mZma/KVyPvpqZmT4AAADAKVyPvoXrUT8AAADAKVyPvpqZmT5mZma/KVyPvoXrUT8AAADAKVyPvoXrUT9mZma/KVyPPpqZmT4AAADAKVyPPpqZmT5mZma/KVyPPoXrUT9mZma/KVyPPpqZmT4AAADAKVyPPoXrUT9mZma/KVyPPoXrUT8AAADAKVyPvoXrUT8AAADAKVyPPoXrUT8AAADAKVyPPoXrUT9mZma/KVyPvoXrUT8AAADAKVyPPoXrUT9mZma/KVyPvoXrUT9mZma/KVyPvpqZmT5mZma/KVyPPpqZmT5mZma/KVyPPpqZmT4AAADAKVyPvpqZmT5mZma/KVyPPpqZmT4AAADAKVyPvpqZmT4AAADA",
+      "byteLength": 972
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 360,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 360,
+      "byteLength": 72,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 432,
+      "byteLength": 108,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 540,
+      "byteLength": 432,
+      "target": 34962
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 30,
+      "type": "VEC3",
+      "min": [
+        -0.550000011920929,
+        -0.3499999940395355,
+        -5.800000190734863
+      ],
+      "max": [
+        0.550000011920929,
+        0.47999998927116394,
+        3.9000000953674316
+      ]
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 6,
+      "type": "VEC3",
+      "min": [
+        -4.599999904632568,
+        -0.07999999821186066,
+        -0.6499999761581421
+      ],
+      "max": [
+        4.599999904632568,
+        -0.07999999821186066,
+        1.350000023841858
+      ]
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 9,
+      "type": "VEC3",
+      "min": [
+        -1.600000023841858,
+        0.05000000074505806,
+        3
+      ],
+      "max": [
+        1.600000023841858,
+        1.4500000476837158,
+        4.150000095367432
+      ]
+    },
+    {
+      "bufferView": 3,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 36,
+      "type": "VEC3",
+      "min": [
+        -0.2800000011920929,
+        0.30000001192092896,
+        -2
+      ],
+      "max": [
+        0.2800000011920929,
+        0.8199999928474426,
+        -0.8999999761581421
+      ]
+    }
+  ]
+}
+

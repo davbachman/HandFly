@@ -1,0 +1,25 @@
+{
+  "name": "handfly",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@babylonjs/core": "9.15.0",
+    "@babylonjs/loaders": "9.15.0",
+    "@mediapipe/tasks-vision": "0.10.35"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.10",
+    "playwright": "^1.61.1",
+    "typescript": "5.8.3",
+    "vite": "8.1.3",
+    "vitest": "^3.2.6"
+  }
+}
