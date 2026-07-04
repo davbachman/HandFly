@@ -46,48 +46,120 @@ function createPbrMaterial(scene: Scene, name: string, color: Color3, roughness 
   return material;
 }
 
+// Tapered lifting surface: a 4-tessellation cylinder is a diamond-section
+// prism that tapers from root to tip; flattening one diamond axis turns it
+// into a convincing low-poly wing once flat-shaded. Length runs along +y.
+function createSpar(
+  scene: Scene,
+  name: string,
+  length: number,
+  rootChord: number,
+  tipChord: number,
+  thickness: number,
+): Mesh {
+  const spar = MeshBuilder.CreateCylinder(
+    name,
+    { height: length, diameterBottom: rootChord, diameterTop: tipChord, tessellation: 4 },
+    scene,
+  );
+  spar.scaling.x = thickness / rootChord;
+  spar.convertToFlatShadedMesh();
+  return spar;
+}
+
+interface PlayerPlane {
+  root: TransformNode;
+  propeller: TransformNode;
+}
+
 // Low-poly stunt plane built from primitives, nose pointing -z. Everything
 // has real volume so it reads correctly from the chase camera at any bank.
-function buildPlane(scene: Scene): TransformNode {
+function buildPlane(scene: Scene): PlayerPlane {
   const root = new TransformNode("player-plane-root", scene);
   const red = createPbrMaterial(scene, "plane-red", new Color3(0.86, 0.09, 0.05), 0.4);
   const white = createPbrMaterial(scene, "plane-white", new Color3(0.93, 0.96, 1), 0.34);
   const navy = createPbrMaterial(scene, "plane-navy", new Color3(0.07, 0.2, 0.45), 0.38);
+  const charcoal = createPbrMaterial(scene, "plane-charcoal", new Color3(0.11, 0.11, 0.13), 0.5);
   const glass = createPbrMaterial(scene, "plane-canopy", new Color3(0.25, 0.7, 0.95), 0.12);
+  glass.alpha = 0.85;
 
   // Cylinder tops face -z after the rotation: wide cowl forward, tapering
-  // toward the tail, with a spinner cone on the very front.
-  const fuselage = MeshBuilder.CreateCylinder("plane-fuselage", { diameterTop: 1.3, diameterBottom: 0.5, height: 7.2, tessellation: 12 }, scene);
+  // toward the tail.
+  const fuselage = MeshBuilder.CreateCylinder("plane-fuselage", { diameterTop: 1.3, diameterBottom: 0.45, height: 7.2, tessellation: 12 }, scene);
   fuselage.rotation.x = -Math.PI / 2;
+  fuselage.convertToFlatShadedMesh();
   fuselage.material = red;
   fuselage.parent = root;
 
-  const nose = MeshBuilder.CreateCylinder("plane-nose", { diameterTop: 0.3, diameterBottom: 1.3, height: 1.3, tessellation: 12 }, scene);
-  nose.rotation.x = -Math.PI / 2;
-  nose.position.z = -4.25;
-  nose.material = white;
-  nose.parent = root;
+  const cowl = MeshBuilder.CreateCylinder("plane-cowl", { diameter: 1.42, height: 0.7, tessellation: 12 }, scene);
+  cowl.rotation.x = -Math.PI / 2;
+  cowl.position.z = -3.75;
+  cowl.convertToFlatShadedMesh();
+  cowl.material = charcoal;
+  cowl.parent = root;
 
-  const wing = MeshBuilder.CreateBox("plane-wing", { width: 9.4, height: 0.3, depth: 2.2 }, scene);
-  wing.position.z = -0.5;
-  wing.position.y = -0.2;
-  wing.material = white;
-  wing.parent = root;
+  // Spinner, two-blade prop, and a translucent motion disc; the whole
+  // assembly spins in update().
+  const propeller = new TransformNode("plane-propeller", scene);
+  propeller.position.z = -4.28;
+  propeller.parent = root;
 
-  for (const sideX of [-5.1, 5.1]) {
-    const tip = MeshBuilder.CreateBox(`plane-wingtip-${sideX}`, { width: 0.26, height: 0.85, depth: 1.5 }, scene);
-    tip.position.set(sideX, 0.14, -0.4);
-    tip.material = navy;
+  const spinner = MeshBuilder.CreateCylinder("plane-spinner", { diameterTop: 0, diameterBottom: 0.52, height: 0.85, tessellation: 8 }, scene);
+  spinner.rotation.x = -Math.PI / 2;
+  spinner.position.z = -0.3;
+  spinner.material = navy;
+  spinner.parent = propeller;
+
+  const blades = MeshBuilder.CreateBox("plane-blades", { width: 0.2, height: 3.1, depth: 0.09 }, scene);
+  blades.material = charcoal;
+  blades.parent = propeller;
+
+  const propDisc = MeshBuilder.CreateDisc("plane-prop-disc", { radius: 1.62, tessellation: 24 }, scene);
+  const discMaterial = new StandardMaterial("plane-prop-disc-material", scene);
+  discMaterial.emissiveColor = new Color3(0.85, 0.88, 0.92);
+  discMaterial.disableLighting = true;
+  discMaterial.alpha = 0.14;
+  discMaterial.backFaceCulling = false;
+  propDisc.material = discMaterial;
+  propDisc.position.z = -0.05;
+  propDisc.parent = propeller;
+
+  // Wings: tapered spars with a little dihedral, red tip fairings.
+  const dihedral = 0.07;
+  for (const side of [-1, 1]) {
+    const wing = createSpar(scene, `plane-wing-${side}`, 4.7, 2.5, 1.45, 0.32);
+    wing.rotation.z = side * (-Math.PI / 2 + dihedral);
+    wing.position.set(side * 2.32, -0.04, -0.5);
+    wing.material = white;
+    wing.parent = root;
+
+    const tip = MeshBuilder.CreateSphere(`plane-wingtip-${side}`, { diameterX: 0.5, diameterY: 0.16, diameterZ: 1.5, segments: 6 }, scene);
+    tip.position.set(side * 4.66, 0.13, -0.5);
+    tip.material = red;
     tip.parent = root;
+
+    const tail = createSpar(scene, `plane-tailplane-${side}`, 1.9, 1.35, 0.8, 0.18);
+    tail.rotation.z = side * (-Math.PI / 2 + 0.05);
+    tail.position.set(side * 0.95, 0.27, 3.25);
+    tail.material = white;
+    tail.parent = root;
+
+    // Fixed gear with wheel spats under the wings.
+    const spat = MeshBuilder.CreateSphere(`plane-spat-${side}`, { diameterX: 0.42, diameterY: 0.85, diameterZ: 1.05, segments: 6 }, scene);
+    spat.position.set(side * 1.55, -0.92, -0.85);
+    spat.material = navy;
+    spat.parent = root;
+
+    const wheel = MeshBuilder.CreateSphere(`plane-wheel-${side}`, { diameter: 0.34, segments: 6 }, scene);
+    wheel.position.set(side * 1.55, -1.3, -0.85);
+    wheel.material = charcoal;
+    wheel.parent = root;
   }
 
-  const tailplane = MeshBuilder.CreateBox("plane-tailplane", { width: 3.6, height: 0.2, depth: 1.3 }, scene);
-  tailplane.position.set(0, 0.25, 3.2);
-  tailplane.material = white;
-  tailplane.parent = root;
-
-  const fin = MeshBuilder.CreateBox("plane-fin", { width: 0.24, height: 1.7, depth: 1.4 }, scene);
-  fin.position.set(0, 1, 3.3);
+  // Swept vertical fin.
+  const fin = createSpar(scene, "plane-fin", 1.9, 1.9, 0.95, 0.2);
+  fin.rotation.x = 0.3;
+  fin.position.set(0, 1.25, 3.55);
   fin.material = navy;
   fin.parent = root;
 
@@ -97,7 +169,7 @@ function buildPlane(scene: Scene): TransformNode {
   canopy.parent = root;
 
   root.scaling = new Vector3(1.15, 1.15, 1.15);
-  return root;
+  return { root, propeller };
 }
 
 function createTerrain(scene: Scene): TransformNode {
@@ -285,7 +357,18 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
 
   const terrain = createTerrain(scene);
   const clouds = createClouds(scene);
-  const planeRoot = buildPlane(scene);
+  const player = buildPlane(scene);
+  const planeRoot = player.root;
+
+  // Soft blob shadow under the plane: the main altitude cue.
+  const shadow = MeshBuilder.CreateDisc("plane-shadow", { radius: 3.2, tessellation: 20 }, scene);
+  shadow.rotation.x = Math.PI / 2;
+  const shadowMaterial = new StandardMaterial("plane-shadow-material", scene);
+  shadowMaterial.diffuseColor = new Color3(0, 0, 0);
+  shadowMaterial.disableLighting = true;
+  shadowMaterial.alpha = 0.24;
+  shadowMaterial.backFaceCulling = false;
+  shadow.material = shadowMaterial;
   const materials = {
     gate: createStandardMaterial(scene, "gate-material", new Color3(0.1, 0.42, 0.96)),
     tunnel: createStandardMaterial(scene, "tunnel-material", new Color3(0.78, 0.28, 0.15)),
@@ -302,6 +385,14 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
     // Positive roll = bank right on screen; with the camera looking down -z
     // that is a positive rotation around z.
     planeRoot.rotation.set(state.plane.pitch, state.plane.yaw, state.plane.roll);
+    player.propeller.rotation.z += dt * (30 + state.plane.speed * 0.35);
+
+    // Shadow shrinks and fades with altitude.
+    shadow.position.set(state.plane.position.x, 0.08, state.plane.position.z);
+    const altitude = Math.max(0, state.plane.position.y);
+    const shadowScale = Math.max(0.35, 1.1 - altitude * 0.012);
+    shadow.scaling.set(shadowScale, shadowScale, 1);
+    shadowMaterial.alpha = Math.max(0.06, 0.3 - altitude * 0.0038);
 
     // Chase camera lags the plane slightly and leans into the bank.
     cameraX = damp(cameraX, state.plane.position.x, 7.5, dt);
