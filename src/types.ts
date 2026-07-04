@@ -21,8 +21,18 @@ export interface HandInputState {
   confidence: number;
   roll: number;
   pitch: number;
+  // Raw pose angles in radians before calibration/shaping; used by the
+  // tracker to capture the player's neutral pose.
+  rollAngle: number;
+  pitchAngle: number;
+  openScore: number;
   lastSeenMs: number;
   source: "mediapipe" | "none";
+}
+
+export interface HandCalibration {
+  rollAngle: number;
+  pitchAngle: number;
 }
 
 export interface KeyboardInputState {
@@ -36,6 +46,7 @@ export interface FlightCommand {
   roll: number;
   pitch: number;
   fire: boolean;
+  boost: boolean;
   source: ControlSource;
   confidence: number;
 }

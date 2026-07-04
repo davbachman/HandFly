@@ -11,6 +11,9 @@ describe("renderGameStateToText", () => {
       confidence: 0.91,
       roll: 0.25,
       pitch: -0.2,
+      rollAngle: 0.24,
+      pitchAngle: -0.19,
+      openScore: 0.9,
       lastSeenMs: 33,
       source: "mediapipe",
     };
@@ -18,6 +21,7 @@ describe("renderGameStateToText", () => {
       roll: 0.25,
       pitch: -0.2,
       fire: true,
+      boost: false,
       source: "hand",
       confidence: 0.91,
     };

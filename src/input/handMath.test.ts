@@ -1,160 +1,192 @@
 import { describe, expect, test } from "vitest";
-import { computeHandInputFromLandmarks } from "./handMath";
+import { computeHandInputFromLandmarks, PITCH_FULL_SCALE, ROLL_FULL_SCALE, shapeAxis } from "./handMath";
 import type { HandLandmark } from "../types";
 
-function makeOpenHand(overrides: Partial<Record<number, Partial<HandLandmark>>> = {}): HandLandmark[] {
-  const points = Array.from({ length: 21 }, (_, i) => ({
-    x: 0.5,
-    y: 0.5,
-    z: 0,
-    visibility: i,
-  }));
+// Fixtures are in raw (non-mirrored) image coordinates: x right, y DOWN,
+// z toward the camera is negative. In that space the user's right side is
+// on the image's left, and a tilt the user sees as clockwise appears
+// counterclockwise here — the same frame MediaPipe reports from a webcam.
 
-  Object.assign(points[0], { x: 0.5, y: 0.72, z: 0.02 });
-  Object.assign(points[4], { x: 0.28, y: 0.5, z: 0 });
-  Object.assign(points[5], { x: 0.4, y: 0.58, z: 0 });
-  Object.assign(points[8], { x: 0.38, y: 0.26, z: -0.08 });
-  Object.assign(points[9], { x: 0.47, y: 0.56, z: 0 });
-  Object.assign(points[12], { x: 0.48, y: 0.21, z: -0.09 });
-  Object.assign(points[13], { x: 0.52, y: 0.54, z: 0.01 });
-  Object.assign(points[16], { x: 0.52, y: 0.48, z: -0.22 });
-  Object.assign(points[17], { x: 0.6, y: 0.57, z: 0 });
-  Object.assign(points[20], { x: 0.72, y: 0.5, z: 0 });
+interface HandPose {
+  // Bank the user perceives, radians; positive = clockwise / bank right.
+  roll?: number;
+  // Finger elevation, radians; positive = fingers rotated up (climb).
+  pitch?: number;
+  fist?: boolean;
+}
 
-  for (const [index, value] of Object.entries(overrides)) {
-    Object.assign(points[Number(index)], value);
+function makeHand(hand: "right" | "left", pose: HandPose = {}): HandLandmark[] {
+  const { roll = 0, pitch = 0, fist = false } = pose;
+  const center = { x: 0.5, y: 0.5 };
+  // Mirror across x for the left hand: thumb side flips.
+  const side = hand === "right" ? 1 : -1;
+
+  const points: HandLandmark[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+  const put = (index: number, dx: number, dy: number, z: number): void => {
+    points[index] = { x: center.x + side * dx, y: center.y + dy, z };
+  };
+
+  // Level open hand, palm down, fingers pointing at the camera.
+  // For a right hand in raw image space the thumb sits at HIGHER x than the
+  // pinky — the exact layout that used to saturate atan2 at +-pi.
+  put(0, 0, 0.13, 0.02); // wrist
+  put(4, 0.16, -0.02, -0.03); // thumb tip, level with the pinky tip
+  put(5, 0.08, -0.02, -0.05); // index mcp
+  put(9, 0.03, -0.025, -0.05); // middle mcp
+  put(13, -0.025, -0.025, -0.05); // ring mcp
+  put(17, -0.08, -0.02, -0.045); // pinky mcp
+
+  // Finger tips extend from their knuckles toward the camera, rotated up by
+  // the pitch angle. A fist curls them back near the palm instead.
+  const fingers: Array<{ tip: number; mcp: number; length: number; splay: number }> = [
+    { tip: 8, mcp: 5, length: 0.1, splay: 0.02 },
+    { tip: 12, mcp: 9, length: 0.12, splay: 0 },
+    { tip: 16, mcp: 13, length: 0.11, splay: -0.005 },
+    { tip: 20, mcp: 17, length: 0.08, splay: -0.04 },
+  ];
+  for (const finger of fingers) {
+    const mcp = points[finger.mcp];
+    if (fist) {
+      const wrist = points[0];
+      points[finger.tip] = {
+        x: mcp.x * 0.45 + wrist.x * 0.55,
+        y: mcp.y * 0.45 + wrist.y * 0.55 - 0.01,
+        z: -0.02,
+      };
+    } else {
+      points[finger.tip] = {
+        x: mcp.x + side * finger.splay,
+        y: mcp.y - Math.sin(pitch) * finger.length,
+        z: mcp.z - Math.cos(pitch) * finger.length,
+      };
+    }
+  }
+
+  // Apply the user's bank: their clockwise = counterclockwise in raw image
+  // space, i.e. rotate by -roll around the hand center.
+  const angle = -roll;
+  for (let i = 0; i < points.length; i += 1) {
+    const dx = points[i].x - center.x;
+    const dy = points[i].y - center.y;
+    points[i] = {
+      x: center.x + dx * Math.cos(angle) - dy * Math.sin(angle),
+      y: center.y + dx * Math.sin(angle) + dy * Math.cos(angle),
+      z: points[i].z,
+    };
   }
 
   return points;
 }
 
 describe("computeHandInputFromLandmarks", () => {
-  test("maps a level open hand to neutral roll and pitch", () => {
-    const input = computeHandInputFromLandmarks(makeOpenHand(), 1000);
+  test("accepts the instructed pose: level hand, fingers pointing at the camera", () => {
+    for (const hand of ["right", "left"] as const) {
+      const input = computeHandInputFromLandmarks(makeHand(hand), 1000);
 
-    expect(input.tracked).toBe(true);
-    expect(input.openHand).toBe(true);
-    expect(input.confidence).toBeGreaterThan(0.8);
-    expect(input.roll).toBeCloseTo(0, 2);
-    expect(input.pitch).toBeCloseTo(0, 2);
+      expect(input.tracked).toBe(true);
+      expect(input.openHand).toBe(true);
+      expect(input.confidence).toBeGreaterThan(0.6);
+      expect(input.roll).toBeCloseTo(0, 1);
+      expect(input.pitch).toBeCloseTo(0, 1);
+    }
   });
 
-  test("maps thumb-to-pinky clockwise tilt to positive roll", () => {
-    const input = computeHandInputFromLandmarks(
-      makeOpenHand({
-        4: { x: 0.3, y: 0.42 },
-        20: { x: 0.7, y: 0.58 },
-      }),
-      1000,
-    );
+  test("level right hand does not saturate roll (thumb at higher image x)", () => {
+    const points = makeHand("right");
+    expect(points[4].x).toBeGreaterThan(points[20].x);
 
-    expect(input.openHand).toBe(true);
-    expect(input.roll).toBeGreaterThan(0.2);
-    expect(input.roll).toBeLessThan(0.35);
+    const input = computeHandInputFromLandmarks(points, 1000);
+    expect(Math.abs(input.roll)).toBeLessThan(0.05);
   });
 
-  test("maps steep roll angles continuously before full bank", () => {
-    const input = computeHandInputFromLandmarks(
-      makeOpenHand({
-        4: { x: 0.4, y: 0.327 },
-        20: { x: 0.6, y: 0.673 },
-      }),
-      1000,
-    );
+  test("banking right yields positive roll for both hands", () => {
+    const right = computeHandInputFromLandmarks(makeHand("right", { roll: 0.52 }), 1000);
+    const left = computeHandInputFromLandmarks(makeHand("left", { roll: 0.52 }), 1000);
 
-    expect(input.openHand).toBe(true);
-    expect(input.roll).toBeGreaterThan(0.6);
-    expect(input.roll).toBeLessThan(0.75);
+    expect(right.openHand).toBe(true);
+    expect(left.openHand).toBe(true);
+    expect(right.roll).toBeGreaterThan(0.3);
+    expect(left.roll).toBeGreaterThan(0.3);
+    expect(right.roll).toBeCloseTo(left.roll, 1);
   });
 
-  test("uses the knuckle axis for roll when thumb and pinky tips remain level", () => {
-    const input = computeHandInputFromLandmarks(
-      makeOpenHand({
-        4: { x: 0.28, y: 0.5 },
-        5: { x: 0.5, y: 0.32 },
-        17: { x: 0.5, y: 0.68 },
-        20: { x: 0.72, y: 0.5 },
-      }),
-      1000,
-    );
-
-    expect(input.openHand).toBe(true);
-    expect(input.roll).toBeGreaterThan(0.8);
+  test("banking left yields negative roll", () => {
+    const input = computeHandInputFromLandmarks(makeHand("right", { roll: -0.52 }), 1000);
+    expect(input.roll).toBeLessThan(-0.3);
   });
 
-  test("keeps right roll positive when the hand passes vertical", () => {
-    const input = computeHandInputFromLandmarks(
-      makeOpenHand({
-        4: { x: 0.28, y: 0.5 },
-        5: { x: 0.54, y: 0.3 },
-        17: { x: 0.46, y: 0.7 },
-        20: { x: 0.72, y: 0.5 },
-      }),
-      1000,
-    );
+  test("roll grows monotonically with bank angle", () => {
+    const gentle = computeHandInputFromLandmarks(makeHand("right", { roll: 0.2 }), 1000);
+    const steep = computeHandInputFromLandmarks(makeHand("right", { roll: 0.8 }), 1000);
 
-    expect(input.openHand).toBe(true);
-    expect(input.roll).toBeGreaterThan(0.8);
+    expect(gentle.roll).toBeGreaterThan(0.05);
+    expect(steep.roll).toBeGreaterThan(gentle.roll);
+    expect(steep.roll).toBeLessThanOrEqual(1);
   });
 
-  test("uses world landmarks for roll when image landmarks stay level", () => {
-    const imageLandmarks = makeOpenHand();
-    const worldLandmarks = makeOpenHand({
-      5: { x: 0, y: -0.25, z: 0 },
-      17: { x: 0, y: 0.25, z: 0 },
-      4: { x: -0.25, y: 0, z: 0 },
-      20: { x: 0.25, y: 0, z: 0 },
-    });
+  test("rotating fingers up commands a climb, down commands a dive", () => {
+    const up = computeHandInputFromLandmarks(makeHand("right", { pitch: 0.45 }), 1000);
+    const down = computeHandInputFromLandmarks(makeHand("right", { pitch: -0.45 }), 1000);
 
-    const input = computeHandInputFromLandmarks(imageLandmarks, 1000, worldLandmarks);
-
-    expect(input.openHand).toBe(true);
-    expect(input.roll).toBeGreaterThan(0.8);
+    expect(up.openHand).toBe(true);
+    expect(up.pitch).toBeGreaterThan(0.3);
+    expect(down.pitch).toBeLessThan(-0.3);
   });
 
-  test("keeps camera-plane right roll when world landmark handedness disagrees", () => {
-    const imageLandmarks = makeOpenHand({
-      4: { x: 0.3, y: 0.42 },
-      20: { x: 0.7, y: 0.58 },
-    });
-    const worldLandmarks = makeOpenHand({
-      4: { x: 0, y: 0.25, z: 0 },
-      20: { x: 0, y: -0.25, z: 0 },
-    });
-
-    const input = computeHandInputFromLandmarks(imageLandmarks, 1000, worldLandmarks);
+  test("pitch still reads correctly while the hand is banked", () => {
+    const input = computeHandInputFromLandmarks(makeHand("right", { roll: 0.5, pitch: 0.4 }), 1000);
 
     expect(input.openHand).toBe(true);
-    expect(input.roll).toBeGreaterThan(0.2);
-    expect(input.roll).toBeLessThan(0.4);
+    expect(input.roll).toBeGreaterThan(0.25);
+    expect(input.pitch).toBeGreaterThan(0.2);
   });
 
-  test("maps ring finger screen rotation to positive climb pitch", () => {
-    const input = computeHandInputFromLandmarks(
-      makeOpenHand({
-        13: { x: 0.52, y: 0.55, z: 0 },
-        16: { x: 0.52, y: 0.43, z: -0.16 },
-      }),
-      1000,
-    );
-
-    expect(input.openHand).toBe(true);
-    expect(input.pitch).toBeGreaterThan(0.35);
-  });
-
-  test("rejects closed hand geometry even when landmarks are present", () => {
-    const input = computeHandInputFromLandmarks(
-      makeOpenHand({
-        8: { x: 0.47, y: 0.62 },
-        12: { x: 0.49, y: 0.63 },
-        16: { x: 0.52, y: 0.63, z: 0 },
-        20: { x: 0.56, y: 0.62 },
-      }),
-      1000,
-    );
+  test("a fist keeps tracking but releases the controls", () => {
+    const input = computeHandInputFromLandmarks(makeHand("right", { fist: true, roll: 0.5 }), 1000);
 
     expect(input.tracked).toBe(true);
     expect(input.openHand).toBe(false);
-    expect(input.confidence).toBeLessThan(0.5);
+    expect(input.roll).toBe(0);
+    expect(input.pitch).toBe(0);
+  });
+
+  test("calibration offsets shift the neutral pose", () => {
+    const tilted = makeHand("right", { roll: 0.2, pitch: 0.2 });
+    const uncalibrated = computeHandInputFromLandmarks(tilted, 1000);
+    const calibrated = computeHandInputFromLandmarks(tilted, 1000, {
+      rollAngle: uncalibrated.rollAngle,
+      pitchAngle: uncalibrated.pitchAngle,
+    });
+
+    expect(uncalibrated.roll).toBeGreaterThan(0.05);
+    expect(calibrated.roll).toBeCloseTo(0, 2);
+    expect(calibrated.pitch).toBeCloseTo(0, 2);
+  });
+
+  test("returns empty input when landmarks are missing", () => {
+    const input = computeHandInputFromLandmarks([], 1000);
+    expect(input.tracked).toBe(false);
+    expect(input.openHand).toBe(false);
+  });
+});
+
+describe("shapeAxis", () => {
+  test("small angles inside the deadzone map to zero", () => {
+    expect(shapeAxis(ROLL_FULL_SCALE * 0.04, ROLL_FULL_SCALE)).toBe(0);
+    expect(shapeAxis(-PITCH_FULL_SCALE * 0.04, PITCH_FULL_SCALE)).toBe(0);
+  });
+
+  test("full-scale angles reach full deflection with matching sign", () => {
+    expect(shapeAxis(ROLL_FULL_SCALE, ROLL_FULL_SCALE)).toBeCloseTo(1, 5);
+    expect(shapeAxis(-ROLL_FULL_SCALE * 2, ROLL_FULL_SCALE)).toBeCloseTo(-1, 5);
+  });
+
+  test("response is monotonic", () => {
+    let previous = 0;
+    for (let step = 1; step <= 10; step += 1) {
+      const value = shapeAxis((ROLL_FULL_SCALE * step) / 10, ROLL_FULL_SCALE);
+      expect(value).toBeGreaterThanOrEqual(previous);
+      previous = value;
+    }
   });
 });

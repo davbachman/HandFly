@@ -20,7 +20,7 @@ export function stepGame(state: GameState, dt: number): void {
   if (collision) {
     state.mode = "crashed";
     state.plane.health = 0;
-    state.crashReason = `Hit ${collision.type} ${collision.id}`;
+    state.crashReason = `Hit the ${collision.type}.`;
   }
 }
 

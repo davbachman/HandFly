@@ -24,9 +24,57 @@ describe("endless course", () => {
     updateCourse(course, plane.position.z);
 
     expect(passed).toBeGreaterThan(0);
-    expect(course.score).toBe(passed * 100);
+    expect(course.score).toBeGreaterThan(0);
     expect(course.obstacles.length).toBeGreaterThanOrEqual(12);
     expect(Math.min(...course.obstacles.map((obstacle) => obstacle.position.z))).toBeLessThan(-400);
+  });
+
+  test("threading an opening scores more than skirting around it", () => {
+    const gate = {
+      id: "gate-score",
+      type: "gate" as const,
+      position: { x: 0, y: 12, z: -4 },
+      width: 24,
+      height: 18,
+      depth: 4,
+      passed: false,
+    };
+    const threadedCourse = createCourse(1);
+    threadedCourse.obstacles = [{ ...gate }];
+    const threadedPlane = createInitialPlaneState();
+    threadedPlane.position.z = -10;
+    updateObstaclePasses(threadedCourse, threadedPlane);
+    expect(threadedCourse.score).toBe(100);
+
+    const bypassCourse = createCourse(1);
+    bypassCourse.obstacles = [{ ...gate }];
+    const bypassPlane = createInitialPlaneState();
+    bypassPlane.position.z = -10;
+    bypassPlane.position.x = 40;
+    updateObstaclePasses(bypassCourse, bypassPlane);
+    expect(bypassCourse.score).toBe(25);
+  });
+
+  test("flying wide of a gate is safe but its frame is solid", () => {
+    const plane = createInitialPlaneState();
+    const course = createCourse(3);
+    course.obstacles = [
+      {
+        id: "gate-frame",
+        type: "gate",
+        position: { x: 0, y: 12, z: -2 },
+        width: 24,
+        height: 18,
+        depth: 4,
+        passed: false,
+      },
+    ];
+
+    plane.position.x = 40; // well clear of the structure
+    expect(checkCourseCollision(course, plane)).toBeNull();
+
+    plane.position.x = 12.5; // inside the frame band around the opening
+    expect(checkCourseCollision(course, plane)?.id).toBe("gate-frame");
   });
 
   test("detects a mountain collision but allows a clean gate traversal", () => {

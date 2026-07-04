@@ -10,6 +10,9 @@ function emptyHand(): HandInputState {
     confidence: 0,
     roll: 0,
     pitch: 0,
+    rollAngle: 0,
+    pitchAngle: 0,
+    openScore: 0,
     lastSeenMs: 0,
     source: "none",
   };
@@ -20,6 +23,7 @@ function emptyCommand(): FlightCommand {
     roll: 0,
     pitch: 0,
     fire: false,
+    boost: false,
     source: "none",
     confidence: 0,
   };
@@ -65,6 +69,7 @@ export function renderGameStateToText(state: GameState): string {
       roll: round(state.command.roll),
       pitch: round(state.command.pitch),
       fire: state.command.fire,
+      boost: state.command.boost,
       source: state.command.source,
     },
     obstacles: visible.map((obstacle) => ({

@@ -1,4 +1,3 @@
-import "@babylonjs/loaders/glTF";
 import {
   Color3,
   Color4,
@@ -14,8 +13,8 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
-import { ImportMeshAsync } from "@babylonjs/core/Loading/sceneLoader";
 import { getVisibleObstacles } from "../game/course";
+import { damp } from "../math";
 import type { GameState, Obstacle } from "../types";
 
 interface ObstacleMeshes {
@@ -26,7 +25,7 @@ interface ObstacleMeshes {
 export interface HandFlyScene {
   engine: Engine;
   scene: Scene;
-  update: (state: GameState) => void;
+  update: (state: GameState, dt: number) => void;
   render: () => void;
   resize: () => void;
   dispose: () => void;
@@ -47,90 +46,57 @@ function createPbrMaterial(scene: Scene, name: string, color: Color3, roughness 
   return material;
 }
 
-function makeFallbackPlane(scene: Scene, parent: TransformNode): void {
-  const red = createPbrMaterial(scene, "fallback-plane-red", new Color3(0.9, 0.06, 0.04), 0.42);
-  const white = createPbrMaterial(scene, "fallback-plane-white", new Color3(0.9, 0.96, 1), 0.35);
-  const canopy = createPbrMaterial(scene, "fallback-plane-canopy", new Color3(0.2, 0.68, 0.92), 0.18);
-
-  const fuselage = MeshBuilder.CreateCylinder("fallback-fuselage", { diameterTop: 0.55, diameterBottom: 1, height: 7.8, tessellation: 8 }, scene);
-  fuselage.rotation.x = Math.PI / 2;
-  fuselage.material = red;
-  fuselage.parent = parent;
-
-  const nose = MeshBuilder.CreateCylinder("fallback-nose", { diameterTop: 0, diameterBottom: 1, height: 1.8, tessellation: 8 }, scene);
-  nose.rotation.x = Math.PI / 2;
-  nose.position.z = -4.8;
-  nose.material = red;
-  nose.parent = parent;
-
-  const wings = MeshBuilder.CreateBox("fallback-wings", { width: 8.8, height: 0.12, depth: 1.6 }, scene);
-  wings.position.z = -0.4;
-  wings.material = white;
-  wings.parent = parent;
-
-  const tail = MeshBuilder.CreateBox("fallback-tail", { width: 2.8, height: 0.1, depth: 1.1 }, scene);
-  tail.position.z = 3.2;
-  tail.position.y = 0.15;
-  tail.material = white;
-  tail.parent = parent;
-
-  const canopyMesh = MeshBuilder.CreateBox("fallback-canopy", { width: 0.78, height: 0.48, depth: 1.2 }, scene);
-  canopyMesh.position.y = 0.65;
-  canopyMesh.position.z = -1.65;
-  canopyMesh.material = canopy;
-  canopyMesh.parent = parent;
-}
-
-function addChaseSilhouette(scene: Scene, parent: TransformNode): void {
-  const wingMaterial = createPbrMaterial(scene, "chase-wing-white", new Color3(0.94, 0.97, 1), 0.34);
-  const tailMaterial = createPbrMaterial(scene, "chase-tail-blue", new Color3(0.05, 0.18, 0.42), 0.38);
-
-  const wing = MeshBuilder.CreateBox("chase-wing", { width: 10.2, height: 0.18, depth: 1.55 }, scene);
-  wing.position.z = -0.3;
-  wing.material = wingMaterial;
-  wing.parent = parent;
-
-  const leftTip = MeshBuilder.CreateBox("chase-left-wingtip", { width: 0.22, height: 0.55, depth: 1.1 }, scene);
-  leftTip.position.x = -5.05;
-  leftTip.position.z = -0.1;
-  leftTip.material = tailMaterial;
-  leftTip.parent = parent;
-
-  const rightTip = MeshBuilder.CreateBox("chase-right-wingtip", { width: 0.22, height: 0.55, depth: 1.1 }, scene);
-  rightTip.position.x = 5.05;
-  rightTip.position.z = -0.1;
-  rightTip.material = tailMaterial;
-  rightTip.parent = parent;
-
-  const verticalTail = MeshBuilder.CreateBox("chase-vertical-tail", { width: 0.2, height: 1.8, depth: 1.0 }, scene);
-  verticalTail.position.y = 1.08;
-  verticalTail.position.z = 3.1;
-  verticalTail.material = tailMaterial;
-  verticalTail.parent = parent;
-}
-
-async function loadPlane(scene: Scene): Promise<TransformNode> {
+// Low-poly stunt plane built from primitives, nose pointing -z. Everything
+// has real volume so it reads correctly from the chase camera at any bank.
+function buildPlane(scene: Scene): TransformNode {
   const root = new TransformNode("player-plane-root", scene);
-  let usedFallback = false;
-  try {
-    const result = await ImportMeshAsync("/assets/handfly-plane.gltf", scene);
-    const importedMeshes = result.meshes.filter((mesh) => mesh instanceof Mesh);
-    if (importedMeshes.length === 0) {
-      makeFallbackPlane(scene, root);
-      usedFallback = true;
-    } else {
-      for (const mesh of importedMeshes) {
-        mesh.parent = root;
-      }
-    }
-  } catch {
-    makeFallbackPlane(scene, root);
-    usedFallback = true;
+  const red = createPbrMaterial(scene, "plane-red", new Color3(0.86, 0.09, 0.05), 0.4);
+  const white = createPbrMaterial(scene, "plane-white", new Color3(0.93, 0.96, 1), 0.34);
+  const navy = createPbrMaterial(scene, "plane-navy", new Color3(0.07, 0.2, 0.45), 0.38);
+  const glass = createPbrMaterial(scene, "plane-canopy", new Color3(0.25, 0.7, 0.95), 0.12);
+
+  // Cylinder tops face -z after the rotation: wide cowl forward, tapering
+  // toward the tail, with a spinner cone on the very front.
+  const fuselage = MeshBuilder.CreateCylinder("plane-fuselage", { diameterTop: 1.3, diameterBottom: 0.5, height: 7.2, tessellation: 12 }, scene);
+  fuselage.rotation.x = -Math.PI / 2;
+  fuselage.material = red;
+  fuselage.parent = root;
+
+  const nose = MeshBuilder.CreateCylinder("plane-nose", { diameterTop: 0.3, diameterBottom: 1.3, height: 1.3, tessellation: 12 }, scene);
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -4.25;
+  nose.material = white;
+  nose.parent = root;
+
+  const wing = MeshBuilder.CreateBox("plane-wing", { width: 9.4, height: 0.3, depth: 2.2 }, scene);
+  wing.position.z = -0.5;
+  wing.position.y = -0.2;
+  wing.material = white;
+  wing.parent = root;
+
+  for (const sideX of [-5.1, 5.1]) {
+    const tip = MeshBuilder.CreateBox(`plane-wingtip-${sideX}`, { width: 0.26, height: 0.85, depth: 1.5 }, scene);
+    tip.position.set(sideX, 0.14, -0.4);
+    tip.material = navy;
+    tip.parent = root;
   }
-  if (!usedFallback) {
-    addChaseSilhouette(scene, root);
-  }
-  root.scaling = new Vector3(1.7, 1.7, 1.7);
+
+  const tailplane = MeshBuilder.CreateBox("plane-tailplane", { width: 3.6, height: 0.2, depth: 1.3 }, scene);
+  tailplane.position.set(0, 0.25, 3.2);
+  tailplane.material = white;
+  tailplane.parent = root;
+
+  const fin = MeshBuilder.CreateBox("plane-fin", { width: 0.24, height: 1.7, depth: 1.4 }, scene);
+  fin.position.set(0, 1, 3.3);
+  fin.material = navy;
+  fin.parent = root;
+
+  const canopy = MeshBuilder.CreateSphere("plane-canopy-bubble", { diameterX: 0.7, diameterY: 0.55, diameterZ: 2.1, segments: 8 }, scene);
+  canopy.position.set(0, 0.58, -1.5);
+  canopy.material = glass;
+  canopy.parent = root;
+
+  root.scaling = new Vector3(1.15, 1.15, 1.15);
   return root;
 }
 
@@ -140,9 +106,12 @@ function createTerrain(scene: Scene): TransformNode {
   const riverMaterial = createStandardMaterial(scene, "terrain-river", new Color3(0.12, 0.35, 0.58));
   const runwayMaterial = createStandardMaterial(scene, "terrain-run", new Color3(0.42, 0.38, 0.32));
 
+  // Tiles at local +500, 0, -500, -1000: with the root snapped to the
+  // nearest 500 of the plane's z there is always ground underfoot and
+  // ~1200 units ahead.
   for (let i = 0; i < 4; i += 1) {
-    const ground = MeshBuilder.CreateGround(`ground-${i}`, { width: 220, height: 520, subdivisions: 12 }, scene);
-    ground.position.z = -180 - i * 500;
+    const ground = MeshBuilder.CreateGround(`ground-${i}`, { width: 640, height: 520, subdivisions: 12 }, scene);
+    ground.position.z = 500 - i * 500;
     ground.material = groundMaterial;
     ground.parent = root;
   }
@@ -181,15 +150,46 @@ function createGate(scene: Scene, obstacle: Obstacle, material: StandardMaterial
     part.material = material;
     part.parent = root;
   }
+
+  // Support posts down to the ground so gates read as pylons, not floaters.
+  const legHeight = obstacle.position.y - obstacle.height / 2;
+  if (legHeight > 1) {
+    for (const sideX of [-obstacle.width / 2, obstacle.width / 2]) {
+      const leg = MeshBuilder.CreateBox(`${obstacle.id}-leg-${sideX}`, { width: 0.6, height: legHeight, depth: 0.6 }, scene);
+      leg.position.x = sideX;
+      leg.position.y = -obstacle.height / 2 - legHeight / 2;
+      leg.material = material;
+      leg.parent = root;
+    }
+  }
   return root;
 }
 
 function createTunnel(scene: Scene, obstacle: Obstacle, material: StandardMaterial): TransformNode {
   const root = new TransformNode(obstacle.id, scene);
-  for (let i = -1; i <= 1; i += 1) {
-    const ring = MeshBuilder.CreateTorus(`${obstacle.id}-ring-${i}`, { diameter: obstacle.width, thickness: 0.9, tessellation: 48 }, scene);
-    ring.scaling.y = obstacle.height / obstacle.width;
-    ring.position.z = i * (obstacle.depth / 3);
+  // Open-ended elliptical tube you actually fly through, with rim rings for
+  // depth cues at the mouths.
+  const tube = MeshBuilder.CreateCylinder(
+    `${obstacle.id}-tube`,
+    {
+      diameter: obstacle.width,
+      height: obstacle.depth,
+      tessellation: 28,
+      cap: Mesh.NO_CAP,
+      sideOrientation: Mesh.DOUBLESIDE,
+    },
+    scene,
+  );
+  tube.rotation.x = Math.PI / 2;
+  tube.scaling.z = obstacle.height / obstacle.width;
+  tube.material = material;
+  tube.parent = root;
+  for (const end of [-1, 1]) {
+    const ring = MeshBuilder.CreateTorus(`${obstacle.id}-ring-${end}`, { diameter: obstacle.width + 1, thickness: 1.4, tessellation: 40 }, scene);
+    // Torus hole faces +y by default; turn it to face down the flight axis.
+    ring.rotation.x = Math.PI / 2;
+    ring.scaling.z = obstacle.height / obstacle.width;
+    ring.position.z = end * (obstacle.depth / 2);
     ring.material = material;
     ring.parent = root;
   }
@@ -209,6 +209,34 @@ function createBridge(scene: Scene, obstacle: Obstacle, material: StandardMateri
     tower.parent = root;
   }
   return root;
+}
+
+// Recycled cloud puffs high above the course; the main speed cue besides
+// the obstacles themselves.
+function createClouds(scene: Scene): Mesh[] {
+  const material = new StandardMaterial("cloud-material", scene);
+  material.diffuseColor = new Color3(1, 1, 1);
+  material.emissiveColor = new Color3(0.88, 0.91, 0.96);
+  material.disableLighting = true;
+  material.alpha = 0.92;
+
+  const clouds: Mesh[] = [];
+  const seededOffset = (i: number, salt: number): number => {
+    const value = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+    return value - Math.floor(value);
+  };
+  for (let i = 0; i < 14; i += 1) {
+    const puff = MeshBuilder.CreateSphere(`cloud-${i}`, { diameter: 15 + seededOffset(i, 1) * 14, segments: 6 }, scene);
+    puff.scaling.y = 0.32;
+    puff.material = material;
+    puff.position.set(
+      (seededOffset(i, 2) - 0.5) * 320,
+      44 + seededOffset(i, 3) * 32,
+      -60 - i * 130 - seededOffset(i, 4) * 70,
+    );
+    clouds.push(puff);
+  }
+  return clouds;
 }
 
 function createMountain(scene: Scene, obstacle: Obstacle, material: StandardMaterial): TransformNode {
@@ -256,23 +284,39 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
   sun.intensity = 2.2;
 
   const terrain = createTerrain(scene);
-  const planeRoot = await loadPlane(scene);
+  const clouds = createClouds(scene);
+  const planeRoot = buildPlane(scene);
   const materials = {
     gate: createStandardMaterial(scene, "gate-material", new Color3(0.1, 0.42, 0.96)),
     tunnel: createStandardMaterial(scene, "tunnel-material", new Color3(0.78, 0.28, 0.15)),
     bridge: createStandardMaterial(scene, "bridge-material", new Color3(0.42, 0.35, 0.28)),
     mountain: createStandardMaterial(scene, "mountain-material", new Color3(0.45, 0.38, 0.32)),
   };
+  // Keep tunnel interiors readable instead of pitch black.
+  materials.tunnel.emissiveColor = new Color3(0.24, 0.09, 0.05);
   const obstacleMeshes = new Map<string, ObstacleMeshes>();
+  let cameraX = 0;
 
-  const update = (state: GameState): void => {
+  const update = (state: GameState, dt: number): void => {
     planeRoot.position.set(state.plane.position.x, state.plane.position.y, state.plane.position.z);
-    planeRoot.rotation.set(state.plane.pitch, state.plane.yaw, -state.plane.roll);
+    // Positive roll = bank right on screen; with the camera looking down -z
+    // that is a positive rotation around z.
+    planeRoot.rotation.set(state.plane.pitch, state.plane.yaw, state.plane.roll);
 
-    camera.position.set(state.plane.position.x, state.plane.position.y + 4.8, state.plane.position.z + 34);
-    camera.setTarget(new Vector3(state.plane.position.x, state.plane.position.y + 0.35, state.plane.position.z - 82));
+    // Chase camera lags the plane slightly and leans into the bank.
+    cameraX = damp(cameraX, state.plane.position.x, 7.5, dt);
+    camera.position.set(cameraX, state.plane.position.y + 4.8, state.plane.position.z + 34);
+    camera.setTarget(new Vector3(cameraX * 0.4 + state.plane.position.x * 0.6, state.plane.position.y + 0.35, state.plane.position.z - 82));
+    const cameraLean = state.plane.roll * 0.18;
+    camera.upVector = new Vector3(-Math.sin(cameraLean), Math.cos(cameraLean), 0);
 
-    terrain.position.z = Math.floor(state.plane.position.z / 500) * 500;
+    terrain.position.z = Math.round(state.plane.position.z / 500) * 500;
+
+    for (const cloud of clouds) {
+      if (cloud.position.z > state.plane.position.z + 80) {
+        cloud.position.z -= 14 * 130;
+      }
+    }
 
     const visible = getVisibleObstacles(state.course, state.plane.position.z);
     const visibleIds = new Set(visible.map((obstacle) => obstacle.id));

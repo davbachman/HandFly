@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@babylonjs/core": "9.15.0",
-    "@babylonjs/loaders": "9.15.0",
     "@mediapipe/tasks-vision": "0.10.35"
   },
   "devDependencies": {

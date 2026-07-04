@@ -10,6 +10,7 @@ declare global {
   interface Window {
     render_game_to_text?: () => string;
     advanceTime?: (ms: number) => void;
+    setRealtime?: (enabled: boolean) => void;
     handFlyState?: GameState;
   }
 }
@@ -36,6 +37,9 @@ const flyScene = await createHandFlyScene(canvas);
 let cameraStarted = false;
 let lastTime = performance.now();
 let deterministicMode = false;
+// Test hook: when false, the rAF loop stops stepping the simulation so
+// advanceTime() drives it exclusively and runs are reproducible.
+let realtimeEnabled = true;
 
 window.handFlyState = state;
 window.render_game_to_text = () => renderGameStateToText(state);
@@ -48,18 +52,18 @@ function syncInputs(nowMs: number): void {
 
 function updateHud(): void {
   const trackingText = state.command.source === "hand" ? "HAND" : state.command.source === "keyboard" ? "KEYS" : "NEUTRAL";
+  const distance = Math.max(0, Math.round(-state.plane.position.z));
   hud.innerHTML = `
     <div class="hud-row">
       <span class="hud-pill">${trackingText}</span>
       <span>Score ${state.course.score}</span>
-      <span>Speed ${Math.round(state.plane.speed)}</span>
-      <span>Roll ${state.command.roll.toFixed(2)}</span>
-      <span>Pitch ${state.command.pitch.toFixed(2)}</span>
+      <span>Dist ${distance}m</span>
+      <span>Alt ${Math.round(state.plane.position.y)}</span>
+      <span>Speed ${Math.round(state.plane.speed)}${state.command.boost ? " BOOST" : ""}</span>
     </div>
     <div class="hud-row subtle">
       <span>${tracker.status}</span>
-      <span>${state.debugVisible ? "Debug on" : "Press H for camera debug"}</span>
-      <span>${state.command.fire ? "Space armed" : "Space reserved"}</span>
+      <span>${state.debugVisible ? "H hide debug · C recalibrate" : "H camera debug · Shift boost"}</span>
     </div>
   `;
   document.body.classList.toggle("debug-visible", state.debugVisible);
@@ -68,14 +72,14 @@ function updateHud(): void {
   if (state.mode === "crashed") {
     startButton.textContent = "Restart Flight";
     const panelText = menu.querySelector("p");
-    if (panelText) panelText.textContent = `${state.crashReason ?? "You clipped the course."} Score ${state.course.score}.`;
+    if (panelText) panelText.textContent = `${state.crashReason ?? "You clipped the course."} Score ${state.course.score}, distance ${Math.max(0, Math.round(-state.plane.position.z))}m. Press Enter or the button to fly again.`;
   }
 }
 
 function updateFrame(dt: number, nowMs: number): void {
   syncInputs(nowMs);
   stepGame(state, dt);
-  flyScene.update(state);
+  flyScene.update(state, dt);
   flyScene.render();
   updateHud();
 }
@@ -88,8 +92,12 @@ window.advanceTime = (ms: number): void => {
   }
 };
 
+window.setRealtime = (enabled: boolean): void => {
+  realtimeEnabled = enabled;
+};
+
 function animate(nowMs: number): void {
-  if (!deterministicMode) {
+  if (realtimeEnabled && !deterministicMode) {
     const dt = Math.min(0.05, Math.max(0.001, (nowMs - lastTime) / 1000));
     updateFrame(dt, nowMs);
   }
@@ -119,6 +127,9 @@ window.addEventListener("keydown", (event) => {
   if (event.code === "KeyH") {
     state.debugVisible = !state.debugVisible;
   }
+  if (event.code === "KeyC") {
+    tracker.recalibrate();
+  }
   if (event.code === "KeyF") {
     if (document.fullscreenElement) {
       void document.exitFullscreen();
@@ -138,7 +149,7 @@ window.addEventListener("beforeunload", () => {
   flyScene.dispose();
 });
 
-flyScene.update(state);
+flyScene.update(state, 1 / 60);
 flyScene.render();
 updateHud();
 requestAnimationFrame(animate);
