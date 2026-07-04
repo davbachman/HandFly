@@ -26,7 +26,7 @@ export function createNeutralKeyboardInput(): KeyboardInputState {
 }
 
 export function deriveFlightCommand(hand: HandInputState, keyboard: KeyboardInputState): FlightCommand {
-  if (hand.tracked && hand.openHand && hand.confidence >= 0.55) {
+  if (hand.tracked && hand.openHand) {
     return {
       roll: clamp(hand.roll, -1, 1),
       pitch: clamp(hand.pitch, -1, 1),
@@ -76,4 +76,3 @@ export function updatePlane(plane: PlaneState, command: FlightCommand, dt: numbe
   plane.position.y = clamp(plane.position.y + plane.velocity.y * dt, 4, 58);
   plane.position.z += plane.velocity.z * dt;
 }
-

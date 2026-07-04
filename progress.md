@@ -5,6 +5,7 @@ Implementation notes:
 - Added test-first core logic for hand geometry, flight, course, collision, simulation, and text state.
 - Built the Babylon.js/Vite/TypeScript browser game with a local glTF plane asset, procedural terrain, gates, tunnels, bridges, mountains, HUD, debug overlay, keyboard fallback, fullscreen, and MediaPipe Hand Landmarker setup.
 - Verified unit tests, production build, production dependency audit, required web-game Playwright client, full-page desktop/mobile screenshots, crash/restart, and reserved space-bar fire state.
+- Fixed hand-roll control by using directed thumb/pinky and knuckle-axis roll signals, passing MediaPipe world landmarks into the roll math, and allowing open-hand input through brief confidence dips.
 
 Follow-ups:
 - Optimize Babylon/MediaPipe bundle splitting before publishing to a bandwidth-sensitive host.

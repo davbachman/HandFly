@@ -34,6 +34,18 @@ describe("flight model", () => {
     expect(command.pitch).toBeCloseTo(-0.4);
   });
 
+  test("uses open-hand roll even when tracking confidence dips", () => {
+    const command = deriveFlightCommand(
+      hand({ tracked: true, openHand: true, confidence: 0.32, roll: -0.75, pitch: 0.1, source: "mediapipe" }),
+      neutralKeyboard,
+    );
+
+    expect(command.source).toBe("hand");
+    expect(command.roll).toBeCloseTo(-0.75);
+    expect(command.pitch).toBeCloseTo(0.1);
+    expect(command.confidence).toBeCloseTo(0.32);
+  });
+
   test("falls back to keyboard when hand is not open", () => {
     const command = deriveFlightCommand(
       hand({ tracked: true, openHand: false, confidence: 0.2, roll: 0.8, pitch: -0.4, source: "mediapipe" }),
@@ -70,4 +82,3 @@ describe("flight model", () => {
     expect(Math.abs(plane.pitch)).toBeLessThan(0.6);
   });
 });
-

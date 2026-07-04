@@ -118,7 +118,11 @@ export function createHandTracker(video: HTMLVideoElement, debugCanvas: HTMLCanv
     if (landmarker && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.currentTime !== lastVideoTime) {
       const result = landmarker.detectForVideo(video, nowMs);
       latestLandmarks = (result.landmarks[0] ?? []) as HandLandmark[];
-      Object.assign(state, latestLandmarks.length > 0 ? computeHandInputFromLandmarks(latestLandmarks, nowMs) : createEmptyHandInput(nowMs));
+      const latestWorldLandmarks = (result.worldLandmarks[0] ?? []) as HandLandmark[];
+      Object.assign(
+        state,
+        latestLandmarks.length > 0 ? computeHandInputFromLandmarks(latestLandmarks, nowMs, latestWorldLandmarks) : createEmptyHandInput(nowMs),
+      );
       lastVideoTime = video.currentTime;
     }
 
@@ -143,4 +147,3 @@ export function createHandTracker(video: HTMLVideoElement, debugCanvas: HTMLCanv
     dispose,
   };
 }
-
