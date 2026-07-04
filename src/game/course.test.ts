@@ -55,6 +55,43 @@ describe("endless course", () => {
     expect(bypassCourse.score).toBe(25);
   });
 
+  test("suspension bridge blocks on the deck and towers but not the spans", () => {
+    const plane = createInitialPlaneState();
+    const course = createCourse(2);
+    course.obstacles = [
+      {
+        id: "bridge-solid",
+        type: "bridge",
+        position: { x: 0, y: 20, z: -2 },
+        width: 46,
+        height: 6,
+        depth: 16,
+        passed: false,
+      },
+    ];
+    // Towers sit at x = +-(width/2 - 4) = +-19 and rise 14 above the deck.
+
+    plane.position.x = 0;
+    plane.position.y = 27; // over the deck, centered between the towers
+    expect(checkCourseCollision(course, plane)).toBeNull();
+
+    plane.position.y = 20; // into the deck slab
+    expect(checkCourseCollision(course, plane)?.id).toBe("bridge-solid");
+
+    plane.position.x = 10;
+    plane.position.y = 8; // under the deck, between pier and center
+    expect(checkCourseCollision(course, plane)).toBeNull();
+
+    plane.position.x = 19;
+    expect(checkCourseCollision(course, plane)?.id).toBe("bridge-solid"); // pier column
+
+    plane.position.y = 30; // tower column above the deck
+    expect(checkCourseCollision(course, plane)?.id).toBe("bridge-solid");
+
+    plane.position.y = 42; // above the tower tops (20 + 3 + 14 = 37)
+    expect(checkCourseCollision(course, plane)).toBeNull();
+  });
+
   test("flying wide of a gate is safe but its frame is solid", () => {
     const plane = createInitialPlaneState();
     const course = createCourse(3);

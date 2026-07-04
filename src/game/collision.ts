@@ -5,6 +5,12 @@ import type { CourseState, Obstacle, PlaneState } from "../types";
 // is safe (but scores less).
 const FRAME_RIM = 1.4;
 
+// Suspension-bridge tower geometry, shared with the renderer so the visual
+// towers and the solid columns stay in lockstep.
+export const BRIDGE_TOWER_INSET = 4;
+export const BRIDGE_TOWER_HALF_WIDTH = 1.6;
+export const BRIDGE_TOWER_RISE = 14;
+
 function zOverlaps(obstacle: Obstacle, plane: PlaneState): boolean {
   return Math.abs(obstacle.position.z - plane.position.z) <= obstacle.depth / 2 + plane.radius;
 }
@@ -33,10 +39,22 @@ function hitsMountain(obstacle: Obstacle, plane: PlaneState): boolean {
   return dx <= horizontalLimit && plane.position.y - plane.radius <= heightAtPlane;
 }
 
+// The deck is a horizontal slab; the two suspension towers are solid
+// columns from the ground to their tops. Fly over or under the deck,
+// between the towers.
 function hitsBridge(obstacle: Obstacle, plane: PlaneState): boolean {
-  const xHit = Math.abs(plane.position.x - obstacle.position.x) <= obstacle.width / 2 + plane.radius;
-  const yHit = Math.abs(plane.position.y - obstacle.position.y) <= obstacle.height / 2 + plane.radius;
-  return xHit && yHit;
+  const deckXHit = Math.abs(plane.position.x - obstacle.position.x) <= obstacle.width / 2 + plane.radius;
+  const deckYHit = Math.abs(plane.position.y - obstacle.position.y) <= obstacle.height / 2 + plane.radius;
+  if (deckXHit && deckYHit) return true;
+
+  const towerX = obstacle.width / 2 - BRIDGE_TOWER_INSET;
+  const towerTop = obstacle.position.y + obstacle.height / 2 + BRIDGE_TOWER_RISE;
+  if (plane.position.y - plane.radius > towerTop) return false;
+  const towerReach = BRIDGE_TOWER_HALF_WIDTH + plane.radius;
+  return (
+    Math.abs(plane.position.x - (obstacle.position.x - towerX)) <= towerReach ||
+    Math.abs(plane.position.x - (obstacle.position.x + towerX)) <= towerReach
+  );
 }
 
 export function checkObstacleCollision(obstacle: Obstacle, plane: PlaneState): boolean {

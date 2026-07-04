@@ -13,6 +13,7 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
+import { BRIDGE_TOWER_HALF_WIDTH, BRIDGE_TOWER_INSET, BRIDGE_TOWER_RISE } from "../game/collision";
 import { getVisibleObstacles } from "../game/course";
 import { damp } from "../math";
 import type { GameState, Obstacle } from "../types";
@@ -205,80 +206,241 @@ function createTerrain(scene: Scene): TransformNode {
   return root;
 }
 
-function createGate(scene: Scene, obstacle: Obstacle, material: StandardMaterial): TransformNode {
+// Shared obstacle materials, created once and reused across recycled meshes.
+interface ObstaclePalette {
+  gate: StandardMaterial;
+  accent: StandardMaterial;
+  steel: StandardMaterial;
+  tunnel: StandardMaterial;
+  tunnelDark: StandardMaterial;
+  tunnelRim: StandardMaterial;
+  stone: StandardMaterial;
+  asphalt: StandardMaterial;
+  roadLine: StandardMaterial;
+  rock: StandardMaterial;
+  snow: StandardMaterial;
+  skirt: StandardMaterial;
+}
+
+function createObstaclePalette(scene: Scene): ObstaclePalette {
+  const palette: ObstaclePalette = {
+    gate: createStandardMaterial(scene, "gate-material", new Color3(0.1, 0.42, 0.96)),
+    accent: createStandardMaterial(scene, "accent-material", new Color3(0.93, 0.95, 0.98)),
+    steel: createStandardMaterial(scene, "steel-material", new Color3(0.16, 0.17, 0.2)),
+    tunnel: createStandardMaterial(scene, "tunnel-material", new Color3(0.8, 0.3, 0.12)),
+    tunnelDark: createStandardMaterial(scene, "tunnel-dark-material", new Color3(0.22, 0.11, 0.07)),
+    tunnelRim: createStandardMaterial(scene, "tunnel-rim-material", new Color3(0.95, 0.62, 0.12)),
+    stone: createStandardMaterial(scene, "stone-material", new Color3(0.5, 0.44, 0.38)),
+    asphalt: createStandardMaterial(scene, "asphalt-material", new Color3(0.17, 0.17, 0.19)),
+    roadLine: createStandardMaterial(scene, "road-line-material", new Color3(0.95, 0.8, 0.2)),
+    rock: createStandardMaterial(scene, "rock-material", new Color3(0.3, 0.25, 0.21)),
+    snow: createStandardMaterial(scene, "snow-material", new Color3(0.93, 0.95, 0.98)),
+    skirt: createStandardMaterial(scene, "skirt-material", new Color3(0.31, 0.42, 0.24)),
+  };
+  // Keep tunnel interiors readable instead of pitch black, and let the rims
+  // pop against fog.
+  palette.tunnelDark.emissiveColor = new Color3(0.1, 0.045, 0.025);
+  palette.tunnelRim.emissiveColor = new Color3(0.22, 0.13, 0.02);
+  palette.roadLine.emissiveColor = new Color3(0.2, 0.16, 0.03);
+  return palette;
+}
+
+// Deterministic per-obstacle variation without extra state.
+function jitterFrom(obstacle: Obstacle, salt: number): number {
+  const value = Math.sin(obstacle.position.z * 12.9898 + salt * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function createGate(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette): TransformNode {
   const root = new TransformNode(obstacle.id, scene);
-  const rail = 0.9;
-  const parts = [
-    MeshBuilder.CreateBox(`${obstacle.id}-top`, { width: obstacle.width, height: rail, depth: rail }, scene),
-    MeshBuilder.CreateBox(`${obstacle.id}-bottom`, { width: obstacle.width, height: rail, depth: rail }, scene),
-    MeshBuilder.CreateBox(`${obstacle.id}-left`, { width: rail, height: obstacle.height, depth: rail }, scene),
-    MeshBuilder.CreateBox(`${obstacle.id}-right`, { width: rail, height: obstacle.height, depth: rail }, scene),
-  ];
-  parts[0].position.y = obstacle.height / 2;
-  parts[1].position.y = -obstacle.height / 2;
-  parts[2].position.x = -obstacle.width / 2;
-  parts[3].position.x = obstacle.width / 2;
-  for (const part of parts) {
-    part.material = material;
-    part.parent = root;
+  const rail = 1.1;
+  const sideSegment = obstacle.height / 3;
+
+  // Air-race style pylon frame: blue rails with white mid-bands on the
+  // uprights and white corner blocks.
+  for (const [name, y] of [
+    ["top", obstacle.height / 2],
+    ["bottom", -obstacle.height / 2],
+  ] as const) {
+    const bar = MeshBuilder.CreateBox(`${obstacle.id}-${name}`, { width: obstacle.width, height: rail, depth: rail }, scene);
+    bar.position.y = y;
+    bar.material = palette.gate;
+    bar.parent = root;
+  }
+  for (const sideX of [-obstacle.width / 2, obstacle.width / 2]) {
+    for (let segment = 0; segment < 3; segment += 1) {
+      const upright = MeshBuilder.CreateBox(
+        `${obstacle.id}-side-${sideX}-${segment}`,
+        { width: rail, height: sideSegment + 0.05, depth: rail },
+        scene,
+      );
+      upright.position.x = sideX;
+      upright.position.y = (segment - 1) * sideSegment;
+      upright.material = segment === 1 ? palette.accent : palette.gate;
+      upright.parent = root;
+    }
+    for (const cornerY of [-obstacle.height / 2, obstacle.height / 2]) {
+      const corner = MeshBuilder.CreateBox(`${obstacle.id}-corner-${sideX}-${cornerY}`, { size: 1.7 }, scene);
+      corner.position.set(sideX, cornerY, 0);
+      corner.material = palette.accent;
+      corner.parent = root;
+    }
   }
 
   // Support posts down to the ground so gates read as pylons, not floaters.
   const legHeight = obstacle.position.y - obstacle.height / 2;
   if (legHeight > 1) {
     for (const sideX of [-obstacle.width / 2, obstacle.width / 2]) {
-      const leg = MeshBuilder.CreateBox(`${obstacle.id}-leg-${sideX}`, { width: 0.6, height: legHeight, depth: 0.6 }, scene);
+      const leg = MeshBuilder.CreateBox(`${obstacle.id}-leg-${sideX}`, { width: 0.55, height: legHeight, depth: 0.55 }, scene);
       leg.position.x = sideX;
       leg.position.y = -obstacle.height / 2 - legHeight / 2;
-      leg.material = material;
+      leg.material = palette.steel;
       leg.parent = root;
     }
   }
   return root;
 }
 
-function createTunnel(scene: Scene, obstacle: Obstacle, material: StandardMaterial): TransformNode {
+function createTunnel(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette): TransformNode {
   const root = new TransformNode(obstacle.id, scene);
-  // Open-ended elliptical tube you actually fly through, with rim rings for
-  // depth cues at the mouths.
-  const tube = MeshBuilder.CreateCylinder(
-    `${obstacle.id}-tube`,
-    {
-      diameter: obstacle.width,
-      height: obstacle.depth,
-      tessellation: 28,
-      cap: Mesh.NO_CAP,
-      sideOrientation: Mesh.DOUBLESIDE,
-    },
+  const ellipse = obstacle.height / obstacle.width;
+
+  // Open-ended elliptical pipe you actually fly through: faceted orange
+  // shell outside, dark bore inside, amber rims at the mouths, and ribs
+  // along the barrel like a segmented pipe.
+  const shell = MeshBuilder.CreateCylinder(
+    `${obstacle.id}-shell`,
+    { diameter: obstacle.width, height: obstacle.depth, tessellation: 22, cap: Mesh.NO_CAP },
     scene,
   );
-  tube.rotation.x = Math.PI / 2;
-  tube.scaling.z = obstacle.height / obstacle.width;
-  tube.material = material;
-  tube.parent = root;
+  shell.rotation.x = Math.PI / 2;
+  shell.scaling.z = ellipse;
+  shell.convertToFlatShadedMesh();
+  shell.material = palette.tunnel;
+  shell.parent = root;
+
+  const bore = MeshBuilder.CreateCylinder(
+    `${obstacle.id}-bore`,
+    { diameter: obstacle.width * 0.985, height: obstacle.depth, tessellation: 22, cap: Mesh.NO_CAP, sideOrientation: Mesh.BACKSIDE },
+    scene,
+  );
+  bore.rotation.x = Math.PI / 2;
+  bore.scaling.z = ellipse;
+  bore.material = palette.tunnelDark;
+  bore.parent = root;
+
   for (const end of [-1, 1]) {
-    const ring = MeshBuilder.CreateTorus(`${obstacle.id}-ring-${end}`, { diameter: obstacle.width + 1, thickness: 1.4, tessellation: 40 }, scene);
+    const rim = MeshBuilder.CreateTorus(`${obstacle.id}-rim-${end}`, { diameter: obstacle.width + 0.8, thickness: 1.5, tessellation: 36 }, scene);
     // Torus hole faces +y by default; turn it to face down the flight axis.
-    ring.rotation.x = Math.PI / 2;
-    ring.scaling.z = obstacle.height / obstacle.width;
-    ring.position.z = end * (obstacle.depth / 2);
-    ring.material = material;
-    ring.parent = root;
+    rim.rotation.x = Math.PI / 2;
+    rim.scaling.z = ellipse;
+    rim.position.z = end * (obstacle.depth / 2);
+    rim.material = palette.tunnelRim;
+    rim.parent = root;
+
+    const rib = MeshBuilder.CreateTorus(`${obstacle.id}-rib-${end}`, { diameter: obstacle.width + 0.5, thickness: 0.7, tessellation: 30 }, scene);
+    rib.rotation.x = Math.PI / 2;
+    rib.scaling.z = ellipse;
+    rib.position.z = end * (obstacle.depth / 6);
+    rib.material = palette.tunnelDark;
+    rib.parent = root;
   }
   return root;
 }
 
-function createBridge(scene: Scene, obstacle: Obstacle, material: StandardMaterial): TransformNode {
+// Suspension bridge: solid towers (mirrored in the collision model), a
+// catenary main cable over each deck face, hangers down to the deck, and
+// anchor blocks beyond the ends. Viewed head-on while flying, the profile
+// reads: tower - draped cable - deck - tower.
+function createBridge(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette): TransformNode {
   const root = new TransformNode(obstacle.id, scene);
+  const deckTop = obstacle.height / 2;
+  const towerX = obstacle.width / 2 - BRIDGE_TOWER_INSET;
+  const towerTop = deckTop + BRIDGE_TOWER_RISE;
+  const groundY = -obstacle.position.y;
+
   const deck = MeshBuilder.CreateBox(`${obstacle.id}-deck`, { width: obstacle.width, height: obstacle.height, depth: obstacle.depth }, scene);
-  deck.material = material;
+  deck.material = palette.stone;
   deck.parent = root;
-  for (const x of [-obstacle.width / 2 + 4, obstacle.width / 2 - 4]) {
-    const tower = MeshBuilder.CreateBox(`${obstacle.id}-tower-${x}`, { width: 2.8, height: obstacle.position.y, depth: obstacle.depth }, scene);
-    tower.position.x = x;
-    tower.position.y = -obstacle.position.y / 2 - obstacle.height / 2;
-    tower.material = material;
-    tower.parent = root;
+
+  // Road surface with a painted center line and low railings.
+  const roadway = MeshBuilder.CreateBox(`${obstacle.id}-roadway`, { width: obstacle.width - 0.8, height: 0.3, depth: obstacle.depth - 1.2 }, scene);
+  roadway.position.y = deckTop + 0.15;
+  roadway.material = palette.asphalt;
+  roadway.parent = root;
+  const line = MeshBuilder.CreateBox(`${obstacle.id}-line`, { width: obstacle.width - 2.5, height: 0.08, depth: 0.5 }, scene);
+  line.position.y = deckTop + 0.32;
+  line.material = palette.roadLine;
+  line.parent = root;
+  for (const side of [-1, 1]) {
+    const railing = MeshBuilder.CreateBox(`${obstacle.id}-railing-${side}`, { width: obstacle.width, height: 0.5, depth: 0.3 }, scene);
+    railing.position.set(0, deckTop + 0.5, side * (obstacle.depth / 2 - 0.3));
+    railing.material = palette.accent;
+    railing.parent = root;
+  }
+
+  // Towers: wider base to the deck, slimmer column above, capped. The
+  // collision column spans the same footprint from ground to top.
+  for (const side of [-1, 1]) {
+    const baseHeight = deckTop + 2 - groundY;
+    const base = MeshBuilder.CreateBox(`${obstacle.id}-tower-base-${side}`, { width: BRIDGE_TOWER_HALF_WIDTH * 2, height: baseHeight, depth: obstacle.depth }, scene);
+    base.position.set(side * towerX, groundY + baseHeight / 2, 0);
+    base.material = palette.stone;
+    base.parent = root;
+
+    const columnHeight = towerTop - (deckTop + 2);
+    const column = MeshBuilder.CreateBox(`${obstacle.id}-tower-${side}`, { width: 2.4, height: columnHeight, depth: obstacle.depth * 0.8 }, scene);
+    column.position.set(side * towerX, deckTop + 2 + columnHeight / 2, 0);
+    column.material = palette.stone;
+    column.parent = root;
+
+    const cap = MeshBuilder.CreateBox(`${obstacle.id}-tower-cap-${side}`, { width: 3.3, height: 0.8, depth: obstacle.depth * 0.9 }, scene);
+    cap.position.set(side * towerX, towerTop + 0.4, 0);
+    cap.material = palette.accent;
+    cap.parent = root;
+  }
+
+  // Main cables: parabola between the tower tops, straight side spans down
+  // to ground anchors beyond the deck ends.
+  const sag = BRIDGE_TOWER_RISE * 0.8;
+  const anchorX = towerX + 12;
+  const mainSpanSamples = 9;
+  for (const face of [-1, 1]) {
+    const cableZ = face * (obstacle.depth / 2 - 0.5);
+    const path: Vector3[] = [new Vector3(-anchorX, groundY + 1.4, cableZ)];
+    for (let i = 0; i <= mainSpanSamples; i += 1) {
+      const t = i / mainSpanSamples;
+      path.push(new Vector3(-towerX + 2 * towerX * t, towerTop - sag * 4 * t * (1 - t), cableZ));
+    }
+    path.push(new Vector3(anchorX, groundY + 1.4, cableZ));
+    const cable = MeshBuilder.CreateTube(`${obstacle.id}-cable-${face}`, { path, radius: 0.24, tessellation: 6 }, scene);
+    cable.material = palette.accent;
+    cable.parent = root;
+
+    // Vertical hangers from the main cable down to the deck.
+    for (let i = 1; i < mainSpanSamples; i += 1) {
+      const t = i / mainSpanSamples;
+      const cableY = towerTop - sag * 4 * t * (1 - t);
+      const hangerTop = cableY;
+      const hangerBottom = deckTop + 0.45;
+      if (hangerTop - hangerBottom < 0.6) continue;
+      const hanger = MeshBuilder.CreateBox(
+        `${obstacle.id}-hanger-${face}-${i}`,
+        { width: 0.14, height: hangerTop - hangerBottom, depth: 0.14 },
+        scene,
+      );
+      hanger.position.set(-towerX + 2 * towerX * t, (hangerTop + hangerBottom) / 2, cableZ);
+      hanger.material = palette.accent;
+      hanger.parent = root;
+    }
+  }
+
+  // Anchor blocks where the cables meet the ground.
+  for (const side of [-1, 1]) {
+    const anchor = MeshBuilder.CreateBox(`${obstacle.id}-anchor-${side}`, { width: 2.6, height: 2.2, depth: obstacle.depth * 0.55 }, scene);
+    anchor.position.set(side * anchorX, groundY + 1.1, 0);
+    anchor.material = palette.stone;
+    anchor.parent = root;
   }
   return root;
 }
@@ -311,28 +473,65 @@ function createClouds(scene: Scene): Mesh[] {
   return clouds;
 }
 
-function createMountain(scene: Scene, obstacle: Obstacle, material: StandardMaterial): TransformNode {
+function createMountain(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette): TransformNode {
   const root = new TransformNode(obstacle.id, scene);
-  const mountain = MeshBuilder.CreateCylinder(
+  const spin = jitterFrom(obstacle, 1) * Math.PI;
+  const footprint = 0.9 + jitterFrom(obstacle, 2) * 0.2;
+
+  // Faceted rock cone with a per-peak twist and squashed footprint so no
+  // two mountains read identical; collision stays the analytic cone.
+  const body = MeshBuilder.CreateCylinder(
     `${obstacle.id}-cone`,
     { diameterTop: 0, diameterBottom: obstacle.width, height: obstacle.height, tessellation: 7 },
     scene,
   );
-  mountain.position.y = obstacle.height / 2;
-  mountain.material = material;
-  mountain.parent = root;
+  body.position.y = obstacle.height / 2;
+  body.rotation.y = spin;
+  body.scaling.x = footprint;
+  body.convertToFlatShadedMesh();
+  body.material = palette.rock;
+  body.parent = root;
+
+  // Mossy foothill skirt grounds the peak in the terrain.
+  const skirt = MeshBuilder.CreateCylinder(
+    `${obstacle.id}-skirt`,
+    { diameterTop: obstacle.width * 0.75, diameterBottom: obstacle.width * 1.5, height: obstacle.height * 0.16, tessellation: 7 },
+    scene,
+  );
+  skirt.position.y = obstacle.height * 0.08;
+  skirt.rotation.y = spin + 0.35;
+  skirt.scaling.x = footprint;
+  skirt.convertToFlatShadedMesh();
+  skirt.material = palette.skirt;
+  skirt.parent = root;
+
+  // Snow cap on the tall peaks only.
+  if (obstacle.height > 26) {
+    const capHeight = obstacle.height * 0.3;
+    const cap = MeshBuilder.CreateCylinder(
+      `${obstacle.id}-snow`,
+      { diameterTop: 0, diameterBottom: (obstacle.width * capHeight) / obstacle.height + 1.2, height: capHeight, tessellation: 7 },
+      scene,
+    );
+    cap.position.y = obstacle.height - capHeight / 2 + 0.15;
+    cap.rotation.y = spin;
+    cap.scaling.x = footprint;
+    cap.convertToFlatShadedMesh();
+    cap.material = palette.snow;
+    cap.parent = root;
+  }
   return root;
 }
 
-function createObstacleMeshes(scene: Scene, obstacle: Obstacle, materials: Record<string, StandardMaterial>): ObstacleMeshes {
+function createObstacleMeshes(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette): ObstacleMeshes {
   const root =
     obstacle.type === "gate"
-      ? createGate(scene, obstacle, materials.gate)
+      ? createGate(scene, obstacle, palette)
       : obstacle.type === "tunnel"
-        ? createTunnel(scene, obstacle, materials.tunnel)
+        ? createTunnel(scene, obstacle, palette)
         : obstacle.type === "bridge"
-          ? createBridge(scene, obstacle, materials.bridge)
-          : createMountain(scene, obstacle, materials.mountain);
+          ? createBridge(scene, obstacle, palette)
+          : createMountain(scene, obstacle, palette);
   return { root, type: obstacle.type };
 }
 
@@ -369,18 +568,22 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
   shadowMaterial.alpha = 0.24;
   shadowMaterial.backFaceCulling = false;
   shadow.material = shadowMaterial;
-  const materials = {
-    gate: createStandardMaterial(scene, "gate-material", new Color3(0.1, 0.42, 0.96)),
-    tunnel: createStandardMaterial(scene, "tunnel-material", new Color3(0.78, 0.28, 0.15)),
-    bridge: createStandardMaterial(scene, "bridge-material", new Color3(0.42, 0.35, 0.28)),
-    mountain: createStandardMaterial(scene, "mountain-material", new Color3(0.45, 0.38, 0.32)),
-  };
-  // Keep tunnel interiors readable instead of pitch black.
-  materials.tunnel.emissiveColor = new Color3(0.24, 0.09, 0.05);
+  const palette = createObstaclePalette(scene);
   const obstacleMeshes = new Map<string, ObstacleMeshes>();
   let cameraX = 0;
+  let elapsed = 0;
+
+  // Bobbing chevron above the next gate/tunnel opening.
+  const marker = MeshBuilder.CreateCylinder("next-marker", { diameterTop: 3.6, diameterBottom: 0, height: 2.2, tessellation: 4 }, scene);
+  marker.scaling.z = 0.4;
+  const markerMaterial = new StandardMaterial("next-marker-material", scene);
+  markerMaterial.diffuseColor = new Color3(0.5, 0.4, 0.05);
+  markerMaterial.emissiveColor = new Color3(0.85, 0.68, 0.1);
+  marker.material = markerMaterial;
+  marker.setEnabled(false);
 
   const update = (state: GameState, dt: number): void => {
+    elapsed += dt;
     planeRoot.position.set(state.plane.position.x, state.plane.position.y, state.plane.position.z);
     // Positive roll = bank right on screen; with the camera looking down -z
     // that is a positive rotation around z.
@@ -422,12 +625,28 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
       let meshes = obstacleMeshes.get(obstacle.id);
       if (!meshes || meshes.type !== obstacle.type) {
         meshes?.root.dispose();
-        meshes = createObstacleMeshes(scene, obstacle, materials);
+        meshes = createObstacleMeshes(scene, obstacle, palette);
         obstacleMeshes.set(obstacle.id, meshes);
       }
       meshes.root.position.set(obstacle.position.x, obstacle.position.y, obstacle.position.z);
       meshes.root.rotation.y = obstacle.type === "bridge" ? Math.sin(obstacle.position.z * 0.03) * 0.12 : 0;
       meshes.root.setEnabled(!obstacle.passed || obstacle.position.z < state.plane.position.z + 30);
+    }
+
+    // Point the chevron at the next opening to thread.
+    const next = visible.find(
+      (obstacle) =>
+        !obstacle.passed &&
+        obstacle.position.z < state.plane.position.z - 4 &&
+        (obstacle.type === "gate" || obstacle.type === "tunnel"),
+    );
+    marker.setEnabled(Boolean(next) && state.mode === "flying");
+    if (next) {
+      marker.position.set(
+        next.position.x,
+        next.position.y + next.height / 2 + 3 + Math.sin(elapsed * 3.2) * 0.7,
+        next.position.z,
+      );
     }
   };
 

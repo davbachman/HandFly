@@ -20,6 +20,13 @@ Control overhaul (July 2026):
 - Boost (Shift, 1.4x), HUD distance/altitude, artificial-horizon widget in the debug overlay, `window.setRealtime(false)` test hook for deterministic scripted runs.
 - Verified with vitest (29 tests) plus a Playwright autopilot that reads render_game_to_text and threads the course deterministically (19/19 checks, ~1800m+ per run).
 
+Obstacle visual overhaul (July 2026):
+- Gates: air-race pylon frames with white corner blocks and mid-band uprights, steel ground legs.
+- Tunnels: faceted orange shell with a separate dark interior bore, amber mouth rims, exterior ribs.
+- Bridges: rebuilt as suspension bridges - tall capped towers, catenary main cables (tubes) with vertical hangers, side spans to ground anchor blocks, asphalt roadway with center line. Towers are now SOLID in the collision model (constants shared between collision.ts and scene.ts), fixing the previously intangible piers; fly over/under the deck between the towers.
+- Mountains: flat-shaded rock with deterministic per-peak twist/footprint variation, mossy foothill skirts, snow caps on peaks taller than 26.
+- Added a bobbing yellow chevron above the next gate/tunnel opening as a navigation cue.
+
 Follow-ups:
 - Optimize Babylon/MediaPipe bundle splitting before publishing to a bandwidth-sensitive host.
 - Tune hand-feel thresholds (deadzone/expo/full-scale angles in handMath.ts) after real hand-tracking play sessions.
