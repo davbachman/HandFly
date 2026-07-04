@@ -10,18 +10,28 @@ const NO_HAND: HandInputState = {
   lastSeenMs: 0,
   source: "none",
 };
+const MAX_CONTROLLABLE_ROLL_ANGLE = Math.PI / 2;
+const ROLL_DEADZONE = 0.06;
 
 export function createEmptyHandInput(nowMs = 0): HandInputState {
   return { ...NO_HAND, lastSeenMs: nowMs };
 }
 
 function rollFromAxis(a: HandLandmark, b: HandLandmark): number {
-  return clamp(Math.atan2(b.y - a.y, b.x - a.x), -1, 1);
+  return clamp(Math.atan2(b.y - a.y, b.x - a.x) / MAX_CONTROLLABLE_ROLL_ANGLE, -1, 1);
 }
 
 function strongestRoll(...signals: number[]): number {
   const rawRoll = signals.reduce((strongest, signal) => (Math.abs(signal) > Math.abs(strongest) ? signal : strongest), 0);
-  return Math.abs(rawRoll) < 0.06 ? 0 : rawRoll;
+  return Math.abs(rawRoll) < ROLL_DEADZONE ? 0 : rawRoll;
+}
+
+function cameraPreferredRoll(imageTipRoll: number, imageKnuckleRoll: number, worldTipRoll: number, worldKnuckleRoll: number): number {
+  const imageRoll = strongestRoll(imageTipRoll, imageKnuckleRoll);
+  if (imageRoll !== 0) {
+    return imageRoll;
+  }
+  return strongestRoll(worldTipRoll, worldKnuckleRoll);
 }
 
 export function computeHandInputFromLandmarks(landmarks: HandLandmark[], nowMs: number, worldLandmarks: HandLandmark[] = []): HandInputState {
@@ -60,7 +70,7 @@ export function computeHandInputFromLandmarks(landmarks: HandLandmark[], nowMs: 
   const imageKnuckleRoll = rollFromAxis(indexMcp, pinkyMcp);
   const worldTipRoll = worldThumbTip && worldPinkyTip ? rollFromAxis(worldThumbTip, worldPinkyTip) : 0;
   const worldKnuckleRoll = worldIndexMcp && worldPinkyMcp ? rollFromAxis(worldIndexMcp, worldPinkyMcp) : 0;
-  const roll = strongestRoll(imageTipRoll, imageKnuckleRoll, worldTipRoll, worldKnuckleRoll);
+  const roll = cameraPreferredRoll(imageTipRoll, imageKnuckleRoll, worldTipRoll, worldKnuckleRoll);
 
   const ringLift = (ringMcp.y - ringTip.y) / palmSpan;
   const neutralLift = 0.136;

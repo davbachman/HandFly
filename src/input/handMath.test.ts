@@ -49,7 +49,22 @@ describe("computeHandInputFromLandmarks", () => {
     );
 
     expect(input.openHand).toBe(true);
-    expect(input.roll).toBeGreaterThan(0.25);
+    expect(input.roll).toBeGreaterThan(0.2);
+    expect(input.roll).toBeLessThan(0.35);
+  });
+
+  test("maps steep roll angles continuously before full bank", () => {
+    const input = computeHandInputFromLandmarks(
+      makeOpenHand({
+        4: { x: 0.4, y: 0.327 },
+        20: { x: 0.6, y: 0.673 },
+      }),
+      1000,
+    );
+
+    expect(input.openHand).toBe(true);
+    expect(input.roll).toBeGreaterThan(0.6);
+    expect(input.roll).toBeLessThan(0.75);
   });
 
   test("uses the knuckle axis for roll when thumb and pinky tips remain level", () => {
@@ -95,6 +110,23 @@ describe("computeHandInputFromLandmarks", () => {
 
     expect(input.openHand).toBe(true);
     expect(input.roll).toBeGreaterThan(0.8);
+  });
+
+  test("keeps camera-plane right roll when world landmark handedness disagrees", () => {
+    const imageLandmarks = makeOpenHand({
+      4: { x: 0.3, y: 0.42 },
+      20: { x: 0.7, y: 0.58 },
+    });
+    const worldLandmarks = makeOpenHand({
+      4: { x: 0, y: 0.25, z: 0 },
+      20: { x: 0, y: -0.25, z: 0 },
+    });
+
+    const input = computeHandInputFromLandmarks(imageLandmarks, 1000, worldLandmarks);
+
+    expect(input.openHand).toBe(true);
+    expect(input.roll).toBeGreaterThan(0.2);
+    expect(input.roll).toBeLessThan(0.4);
   });
 
   test("maps ring finger screen rotation to positive climb pitch", () => {
