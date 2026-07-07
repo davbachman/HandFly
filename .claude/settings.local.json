@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/davidbachman/Documents/HandFly log --oneline -10)",
+      "Bash(npm test *)",
+      "Bash(npm run *)",
+      "Bash(node /private/tmp/claude-501/-Users-davidbachman-Documents-HandFly/314e18fd-6abf-4fa8-8752-ff2ee3bfaa22/scratchpad/verify.mjs)",
+      "Bash(python3 -c ' *)",
+      "Bash(npm uninstall *)",
+      "Bash(git -C /Users/davidbachman/Documents/HandFly status --short)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(node /private/tmp/claude-501/-Users-davidbachman-Documents-HandFly/314e18fd-6abf-4fa8-8752-ff2ee3bfaa22/scratchpad/bridge-shot.mjs)",
+      "Bash(node /private/tmp/claude-501/-Users-davidbachman-Documents-HandFly/314e18fd-6abf-4fa8-8752-ff2ee3bfaa22/scratchpad/damage-shot.mjs)",
+      "Bash(lsof -ti:5173)",
+      "Bash(xargs kill -9)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5173/)",
+      "Bash(ls -la /Users/davidbachman/Documents/HandFly/.claude/ 2>/dev/null; mkdir -p /Users/davidbachman/Documents/HandFly/.claude/skills/mediapipe-hand-3d-controls/references /Users/davidbachman/Documents/HandFly/.claude/skills/mediapipe-hand-3d-controls/scripts /Users/davidbachman/Documents/HandFly/.claude/skills/mediapipe-hand-3d-controls/evals && echo \"dirs ready\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"tsc exit code: $?\")"
+    ]
+  }
+}

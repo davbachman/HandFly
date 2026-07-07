@@ -9,9 +9,11 @@ function hand(overrides: Partial<HandInputState>): HandInputState {
     confidence: 0,
     roll: 0,
     pitch: 0,
+    fire: false,
     rollAngle: 0,
     pitchAngle: 0,
     openScore: 0,
+    thumbIndexDistance: 0,
     lastSeenMs: 0,
     source: "none",
     ...overrides,
@@ -22,7 +24,6 @@ const neutralKeyboard: KeyboardInputState = {
   rollAxis: 0,
   pitchAxis: 0,
   fire: false,
-  boost: false,
 };
 
 describe("flight model", () => {
@@ -48,16 +49,32 @@ describe("flight model", () => {
     expect(command.pitch).toBeCloseTo(1);
   });
 
-  test("space and shift merge into hand flight instead of stealing the stick", () => {
+  test("space merges into hand flight instead of stealing the stick", () => {
     const command = deriveFlightCommand(
-      hand({ tracked: true, openHand: true, confidence: 0.9, roll: 0.4, pitch: 0.1, source: "mediapipe" }),
-      { ...neutralKeyboard, fire: true, boost: true },
+      hand({ tracked: true, openHand: true, confidence: 0.9, roll: 0.4, pitch: 0.1, fire: false, source: "mediapipe" }),
+      { ...neutralKeyboard, fire: true },
     );
 
     expect(command.source).toBe("hand");
     expect(command.roll).toBeCloseTo(0.4);
     expect(command.fire).toBe(true);
-    expect(command.boost).toBe(true);
+  });
+
+  test("space is the only firing input while hand steering stays active", () => {
+    const handCommand = deriveFlightCommand(
+      hand({ tracked: true, openHand: true, confidence: 0.9, roll: 0.4, pitch: 0.1, fire: true, source: "mediapipe" }),
+      neutralKeyboard,
+    );
+    expect(handCommand.source).toBe("hand");
+    expect(handCommand.fire).toBe(false);
+
+    const keyboardCommand = deriveFlightCommand(hand({ tracked: true, openHand: true, roll: 0.4, pitch: 0.1, source: "mediapipe" }), {
+      ...neutralKeyboard,
+      fire: true,
+    });
+    expect(keyboardCommand.source).toBe("hand");
+    expect(keyboardCommand.roll).toBeCloseTo(0.4);
+    expect(keyboardCommand.fire).toBe(true);
   });
 
   test("falls back to keyboard when hand is not open", () => {
@@ -76,7 +93,7 @@ describe("flight model", () => {
     const plane = createInitialPlaneState();
 
     for (let i = 0; i < 60; i += 1) {
-      updatePlane(plane, { roll: 1, pitch: 0.5, fire: false, boost: false, source: "hand", confidence: 1 }, 1 / 60);
+      updatePlane(plane, { roll: 1, pitch: 0.5, fire: false, source: "hand", confidence: 1 }, 1 / 60);
     }
 
     expect(plane.roll).toBeGreaterThan(0.5);
@@ -90,28 +107,23 @@ describe("flight model", () => {
     const plane = createInitialPlaneState();
 
     for (let i = 0; i < 600; i += 1) {
-      updatePlane(plane, { roll: 1, pitch: 0, fire: false, boost: false, source: "hand", confidence: 1 }, 1 / 60);
+      updatePlane(plane, { roll: 1, pitch: 0, fire: false, source: "hand", confidence: 1 }, 1 / 60);
     }
     expect(Math.abs(plane.yaw)).toBeLessThan(0.6);
 
     for (let i = 0; i < 600; i += 1) {
-      updatePlane(plane, { roll: 0, pitch: 0, fire: false, boost: false, source: "none", confidence: 0 }, 1 / 60);
+      updatePlane(plane, { roll: 0, pitch: 0, fire: false, source: "none", confidence: 0 }, 1 / 60);
     }
     expect(Math.abs(plane.yaw)).toBeLessThan(0.02);
   });
 
-  test("boost raises speed toward the boost multiplier and it decays back", () => {
+  test("speed stays at cruise without a boost mechanic", () => {
     const plane = createInitialPlaneState();
 
     for (let i = 0; i < 180; i += 1) {
-      updatePlane(plane, { roll: 0, pitch: 0, fire: false, boost: true, source: "keyboard", confidence: 1 }, 1 / 60);
+      updatePlane(plane, { roll: 0, pitch: 0, fire: false, source: "keyboard", confidence: 1 }, 1 / 60);
     }
-    expect(plane.speed).toBeGreaterThan(CRUISE_SPEED * 1.3);
-
-    for (let i = 0; i < 240; i += 1) {
-      updatePlane(plane, { roll: 0, pitch: 0, fire: false, boost: false, source: "none", confidence: 0 }, 1 / 60);
-    }
-    expect(plane.speed).toBeLessThan(CRUISE_SPEED * 1.05);
+    expect(plane.speed).toBeCloseTo(CRUISE_SPEED);
   });
 
   test("returns toward neutral when tracking is lost", () => {
@@ -119,7 +131,7 @@ describe("flight model", () => {
     plane.roll = 0.9;
     plane.pitch = -0.6;
 
-    updatePlane(plane, { roll: 0, pitch: 0, fire: false, boost: false, source: "none", confidence: 0 }, 0.4);
+    updatePlane(plane, { roll: 0, pitch: 0, fire: false, source: "none", confidence: 0 }, 0.4);
 
     expect(Math.abs(plane.roll)).toBeLessThan(0.9);
     expect(Math.abs(plane.pitch)).toBeLessThan(0.6);

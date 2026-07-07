@@ -1,0 +1,27 @@
+{
+  "skill_name": "mediapipe-hand-3d-controls",
+  "note": "Test prompts for a with-skill vs. baseline eval run (see skill-creator). Assertions are intentionally left to add when running the loop with a reviewer present.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm using @mediapipe/tasks-vision to fly a little plane in a Three.js scene with my hand. Tilting my hand banks the plane, but it banks the WRONG way — tilt right, plane rolls left. And when I hold my hand flat it already reads as a hard bank. What's going on?",
+      "expected_output": "Identifies the two distinct bugs: (1) level hand saturating = using a directed atan2 vector instead of an undirected line angle wrapped to [-pi/2, pi/2]; (2) inverted direction = either the un-mirrored feed needs a sign flip at the source, or the Three.js (right-handed) engine mapping sign. Recommends the measure-don't-derive method to separate the hand-value bug from the engine-mapping bug.",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Building a hand-gesture controller for a Babylon.js product viewer. I want an open palm facing the camera to grab and rotate the model, and a fist to let go. Right now MediaPipe never detects my open hand when my palm faces the screen — it only works when my hand is sideways. How should I detect the open hand and map its rotation to the model?",
+      "expected_output": "Explains that 2D screen-distance openness collapses under foreshortening (palm at camera) and prescribes 3D spread + reach ratios normalized by the knuckle span. Covers extracting orientation and mapping it onto the Babylon (left-handed) model, and calibrating a neutral pose. May reference world-landmarks for true 3D orientation vs image-landmarks for screen-relative.",
+      "assertions": [],
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "My MediaPipe hand-steering works until I tilt my hand past vertical during a sharp turn — then the steering suddenly snaps to the opposite direction and I lose control. Also the whole thing is jittery and sometimes drops to neutral for a frame. Can you fix the control math?",
+      "expected_output": "Diagnoses the past-vertical sign flip as the period-pi wrap of undirected line angles and prescribes frame-to-frame unwrapping (continuousLineAngle) with a cap. Addresses jitter with EMA smoothing + deadzone, and the neutral-snap with a short grace window over dropped frames. Bonus: guarding detectForVideo timestamps/try-catch.",
+      "assertions": [],
+      "files": []
+    }
+  ]
+}

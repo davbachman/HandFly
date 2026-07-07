@@ -48,6 +48,12 @@ button {
   display: block;
 }
 
+.practice-mode #debug-canvas {
+  width: min(44vw, 520px);
+  right: 24px;
+  bottom: 24px;
+}
+
 #hud {
   position: fixed;
   left: 18px;
@@ -90,6 +96,56 @@ button {
   letter-spacing: 0;
 }
 
+.hud-meter {
+  display: inline-block;
+  vertical-align: -1px;
+  width: 84px;
+  height: 10px;
+  margin-left: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 3px;
+  background: rgba(8, 16, 24, 0.45);
+  overflow: hidden;
+}
+
+.hud-meter i {
+  display: block;
+  height: 100%;
+  transition: width 0.25s ease;
+}
+
+#control-warning {
+  position: fixed;
+  left: 50%;
+  top: 20%;
+  transform: translateX(-50%);
+  padding: 10px 24px;
+  border-radius: 8px;
+  background: rgba(186, 34, 24, 0.86);
+  color: #fff;
+  font-size: clamp(16px, 2.6vw, 22px);
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 4;
+  animation: control-warning-pulse 1.1s ease-in-out infinite;
+}
+
+#control-warning.hidden {
+  display: none;
+}
+
+@keyframes control-warning-pulse {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 #menu {
   position: fixed;
   inset: 0;
@@ -122,9 +178,31 @@ button {
 }
 
 .menu-panel p {
-  margin: 0 0 22px;
+  margin: 0 0 18px;
   line-height: 1.5;
   color: rgba(245, 249, 255, 0.88);
+}
+
+.menu-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  margin: 0 0 18px;
+  font-weight: 750;
+  color: rgba(245, 249, 255, 0.92);
+  cursor: pointer;
+}
+
+.menu-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #f4c542;
+}
+
+.menu-actions {
+  display: grid;
+  gap: 10px;
 }
 
 .menu-panel button {
@@ -136,6 +214,12 @@ button {
   color: #17202a;
   font-weight: 800;
   cursor: pointer;
+}
+
+.menu-panel button.secondary {
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fbff;
 }
 
 .menu-panel button:focus-visible {
@@ -173,4 +257,3 @@ button {
     padding: 22px;
   }
 }
-

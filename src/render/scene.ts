@@ -17,6 +17,7 @@ import { BRIDGE_TOWER_HALF_WIDTH, BRIDGE_TOWER_INSET, BRIDGE_TOWER_RISE } from "
 import { getVisibleObstacles } from "../game/course";
 import { damp } from "../math";
 import type { GameState, Obstacle } from "../types";
+import { TERRAIN_STRIP_SURFACE_Y } from "./terrainDepth";
 
 interface ObstacleMeshes {
   root: TransformNode;
@@ -191,14 +192,14 @@ function createTerrain(scene: Scene): TransformNode {
 
   const river = MeshBuilder.CreateGround("river", { width: 28, height: 2200, subdivisions: 2 }, scene);
   river.position.x = -52;
-  river.position.y = 0.03;
+  river.position.y = TERRAIN_STRIP_SURFACE_Y;
   river.position.z = -760;
   river.material = riverMaterial;
   river.parent = root;
 
   const path = MeshBuilder.CreateGround("distant-course-path", { width: 18, height: 2200, subdivisions: 2 }, scene);
   path.position.x = 42;
-  path.position.y = 0.04;
+  path.position.y = TERRAIN_STRIP_SURFACE_Y;
   path.position.z = -760;
   path.material = runwayMaterial;
   path.parent = root;
@@ -559,15 +560,85 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
   const player = buildPlane(scene);
   const planeRoot = player.root;
 
-  // Soft blob shadow under the plane: the main altitude cue.
-  const shadow = MeshBuilder.CreateDisc("plane-shadow", { radius: 3.2, tessellation: 20 }, scene);
-  shadow.rotation.x = Math.PI / 2;
+  // Plane-shaped shadow projected along the sun direction: a wing ellipse
+  // crossed with a fuselage ellipse, displaced sideways with altitude the
+  // way a real sun shadow travels, and softer/fainter the higher you fly.
   const shadowMaterial = new StandardMaterial("plane-shadow-material", scene);
   shadowMaterial.diffuseColor = new Color3(0, 0, 0);
   shadowMaterial.disableLighting = true;
-  shadowMaterial.alpha = 0.24;
+  shadowMaterial.alpha = 0.3;
   shadowMaterial.backFaceCulling = false;
-  shadow.material = shadowMaterial;
+  const shadowRoot = new TransformNode("plane-shadow-root", scene);
+  const wingShadow = MeshBuilder.CreateDisc("plane-shadow-wing", { radius: 1, tessellation: 18 }, scene);
+  wingShadow.rotation.x = Math.PI / 2;
+  wingShadow.scaling.set(5.6, 1.35, 1);
+  wingShadow.material = shadowMaterial;
+  wingShadow.parent = shadowRoot;
+  const bodyShadow = MeshBuilder.CreateDisc("plane-shadow-body", { radius: 1, tessellation: 18 }, scene);
+  bodyShadow.rotation.x = Math.PI / 2;
+  bodyShadow.scaling.set(0.95, 4.4, 1);
+  bodyShadow.position.y = 0.012;
+  bodyShadow.material = shadowMaterial;
+  bodyShadow.parent = shadowRoot;
+  // Ground offset per unit of altitude along the sun's slant.
+  const shadowSlantX = -0.45 / 0.85;
+  const shadowSlantZ = -0.35 / 0.85;
+
+  // Mesh-based explosion: a bright flash plus fire and smoke chunks thrown
+  // outward under gravity when the last hit lands.
+  const fireMaterial = new StandardMaterial("explosion-fire", scene);
+  fireMaterial.diffuseColor = new Color3(0.9, 0.3, 0.05);
+  fireMaterial.emissiveColor = new Color3(1, 0.52, 0.1);
+  fireMaterial.disableLighting = true;
+  const smokeMaterial = new StandardMaterial("explosion-smoke", scene);
+  smokeMaterial.diffuseColor = new Color3(0.2, 0.18, 0.16);
+  smokeMaterial.emissiveColor = new Color3(0.14, 0.12, 0.1);
+  smokeMaterial.disableLighting = true;
+  const flashMaterial = new StandardMaterial("explosion-flash", scene);
+  flashMaterial.emissiveColor = new Color3(1, 0.88, 0.5);
+  flashMaterial.disableLighting = true;
+  flashMaterial.alpha = 0.9;
+
+  interface DebrisPiece {
+    mesh: Mesh;
+    velocity: Vector3;
+    size: number;
+  }
+  const debris: DebrisPiece[] = [];
+  for (let i = 0; i < 14; i += 1) {
+    const size = 0.6 + (i % 4) * 0.28;
+    const mesh = MeshBuilder.CreateSphere(`debris-${i}`, { diameter: size, segments: 4 }, scene);
+    mesh.material = i % 3 === 0 ? smokeMaterial : fireMaterial;
+    mesh.setEnabled(false);
+    debris.push({ mesh, velocity: new Vector3(), size });
+  }
+  const flash = MeshBuilder.CreateSphere("explosion-flash-sphere", { diameter: 5, segments: 8 }, scene);
+  flash.material = flashMaterial;
+  flash.setEnabled(false);
+  let explosionAge = -1;
+
+  const startExplosion = (position: Vector3): void => {
+    explosionAge = 0;
+    for (const piece of debris) {
+      piece.mesh.setEnabled(true);
+      piece.mesh.scaling.setAll(1);
+      piece.mesh.position.copyFrom(position);
+      const theta = Math.random() * Math.PI * 2;
+      const up = Math.random() * 0.9 + 0.25;
+      const speed = 10 + Math.random() * 20;
+      piece.velocity.set(Math.cos(theta) * speed, up * speed, Math.sin(theta) * speed * 0.6);
+    }
+    flash.setEnabled(true);
+    flash.position.copyFrom(position);
+    flash.scaling.setAll(1);
+    flashMaterial.alpha = 0.9;
+  };
+
+  const stopExplosion = (): void => {
+    explosionAge = -1;
+    for (const piece of debris) piece.mesh.setEnabled(false);
+    flash.setEnabled(false);
+  };
   const palette = createObstaclePalette(scene);
   const obstacleMeshes = new Map<string, ObstacleMeshes>();
   let cameraX = 0;
@@ -582,6 +653,76 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
   marker.material = markerMaterial;
   marker.setEnabled(false);
 
+  // Balloons: gold scores, green repairs. Meshes are keyed by balloon id
+  // and rebuilt if the kind changes on respawn.
+  const balloonGold = createStandardMaterial(scene, "balloon-gold", new Color3(0.95, 0.68, 0.12));
+  balloonGold.emissiveColor = new Color3(0.3, 0.2, 0.02);
+  const balloonGreen = createStandardMaterial(scene, "balloon-green", new Color3(0.24, 0.78, 0.35));
+  balloonGreen.emissiveColor = new Color3(0.04, 0.22, 0.07);
+  interface BalloonMeshes {
+    root: TransformNode;
+    kind: string;
+  }
+  const balloonMeshes = new Map<string, BalloonMeshes>();
+  const createBalloonMeshes = (id: string, kind: string, radius: number): BalloonMeshes => {
+    const root = new TransformNode(`${id}-root`, scene);
+    const material = kind === "repair" ? balloonGreen : balloonGold;
+    const envelope = MeshBuilder.CreateSphere(`${id}-envelope`, { diameter: radius * 2, segments: 10 }, scene);
+    envelope.scaling.y = 1.16;
+    envelope.material = material;
+    envelope.parent = root;
+    const knot = MeshBuilder.CreateCylinder(`${id}-knot`, { diameterTop: 0.7, diameterBottom: 0.2, height: 0.8, tessellation: 6 }, scene);
+    knot.position.y = -radius * 1.16 - 0.3;
+    knot.material = material;
+    knot.parent = root;
+    const string = MeshBuilder.CreateBox(`${id}-string`, { width: 0.08, height: 5, depth: 0.08 }, scene);
+    string.position.y = -radius * 1.16 - 3.2;
+    string.material = palette.steel;
+    string.parent = root;
+    return { root, kind };
+  };
+
+  // Tracer pool: identical dots, assigned to live projectiles in order.
+  const tracerMaterial = new StandardMaterial("tracer-material", scene);
+  tracerMaterial.emissiveColor = new Color3(1, 0.85, 0.25);
+  tracerMaterial.disableLighting = true;
+  const tracers: Mesh[] = [];
+  for (let i = 0; i < 10; i += 1) {
+    const tracer = MeshBuilder.CreateSphere(`tracer-${i}`, { diameter: 0.8, segments: 6 }, scene);
+    tracer.scaling.z = 3.2;
+    tracer.material = tracerMaterial;
+    tracer.setEnabled(false);
+    tracers.push(tracer);
+  }
+
+  // Short-lived pop flashes where balloons burst.
+  interface PopFlash {
+    mesh: Mesh;
+    material: StandardMaterial;
+    age: number;
+  }
+  const popFlashes: PopFlash[] = [];
+  for (let i = 0; i < 4; i += 1) {
+    const material = new StandardMaterial(`pop-flash-${i}`, scene);
+    material.disableLighting = true;
+    material.alpha = 0;
+    const mesh = MeshBuilder.CreateSphere(`pop-flash-${i}`, { diameter: 6, segments: 8 }, scene);
+    mesh.material = material;
+    mesh.setEnabled(false);
+    popFlashes.push({ mesh, material, age: -1 });
+  }
+  const triggerPopFlash = (position: Vector3, color: Color3): void => {
+    const flashSlot = popFlashes.find((slot) => slot.age < 0) ?? popFlashes[0];
+    flashSlot.age = 0;
+    flashSlot.mesh.setEnabled(true);
+    flashSlot.mesh.position.copyFrom(position);
+    flashSlot.mesh.scaling.setAll(0.6);
+    flashSlot.material.emissiveColor = color;
+    flashSlot.material.alpha = 0.85;
+  };
+
+  let wasCrashed = false;
+
   const update = (state: GameState, dt: number): void => {
     elapsed += dt;
     planeRoot.position.set(state.plane.position.x, state.plane.position.y, state.plane.position.z);
@@ -590,16 +731,54 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
     planeRoot.rotation.set(state.plane.pitch, state.plane.yaw, state.plane.roll);
     player.propeller.rotation.z += dt * (30 + state.plane.speed * 0.35);
 
-    // Shadow shrinks and fades with altitude.
-    shadow.position.set(state.plane.position.x, 0.08, state.plane.position.z);
-    const altitude = Math.max(0, state.plane.position.y);
-    const shadowScale = Math.max(0.35, 1.1 - altitude * 0.012);
-    shadow.scaling.set(shadowScale, shadowScale, 1);
-    shadowMaterial.alpha = Math.max(0.06, 0.3 - altitude * 0.0038);
+    // Explosion on the final hit; the plane disappears into it.
+    const crashed = state.mode === "crashed";
+    if (crashed && !wasCrashed) {
+      startExplosion(planeRoot.position.clone());
+    } else if (!crashed && wasCrashed) {
+      stopExplosion();
+    }
+    wasCrashed = crashed;
+    if (explosionAge >= 0) {
+      explosionAge += dt;
+      const fade = Math.max(0.01, 1 - explosionAge / 1.15);
+      for (const piece of debris) {
+        piece.mesh.position.addInPlace(piece.velocity.scale(dt));
+        piece.velocity.y -= 40 * dt;
+        piece.mesh.scaling.setAll(fade * 1.4);
+      }
+      flash.scaling.setAll(1 + explosionAge * 9);
+      flashMaterial.alpha = Math.max(0, 0.9 - explosionAge * 2.3);
+      if (explosionAge > 1.25) stopExplosion();
+    }
 
-    // Chase camera lags the plane slightly and leans into the bank.
+    // Blink through the post-hit invulnerability window.
+    const sinceHitMs = state.elapsedMs - state.lastHitMs;
+    const blinkOff = state.mode === "flying" && sinceHitMs >= 0 && sinceHitMs < 1500 && Math.floor(state.elapsedMs / 90) % 2 === 1;
+    planeRoot.setEnabled(!crashed && !blinkOff);
+
+    // Sun-projected shadow: displaced along the light slant, softer and
+    // fainter with altitude, turned with the plane's heading.
+    const altitude = Math.max(0, state.plane.position.y);
+    shadowRoot.position.set(
+      state.plane.position.x + altitude * shadowSlantX,
+      0.09,
+      state.plane.position.z + altitude * shadowSlantZ,
+    );
+    shadowRoot.rotation.y = state.plane.yaw;
+    const spread = 1 + altitude * 0.006;
+    shadowRoot.scaling.set(spread, 1, spread);
+    shadowMaterial.alpha = crashed ? 0 : Math.max(0.05, 0.32 - altitude * 0.0042);
+
+    // Chase camera lags the plane slightly and leans into the bank; recent
+    // hits rattle it.
     cameraX = damp(cameraX, state.plane.position.x, 7.5, dt);
     camera.position.set(cameraX, state.plane.position.y + 4.8, state.plane.position.z + 34);
+    if (sinceHitMs >= 0 && sinceHitMs < 650) {
+      const shakeAmp = (crashed ? 1.9 : 0.9) * (1 - sinceHitMs / 650);
+      camera.position.x += Math.sin(state.elapsedMs * 0.115) * shakeAmp;
+      camera.position.y += Math.sin(state.elapsedMs * 0.147 + 1.7) * shakeAmp * 0.7;
+    }
     camera.setTarget(new Vector3(cameraX * 0.4 + state.plane.position.x * 0.6, state.plane.position.y + 0.35, state.plane.position.z - 82));
     const cameraLean = state.plane.roll * 0.18;
     camera.upVector = new Vector3(-Math.sin(cameraLean), Math.cos(cameraLean), 0);
@@ -647,6 +826,58 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
         next.position.y + next.height / 2 + 3 + Math.sin(elapsed * 3.2) * 0.7,
         next.position.z,
       );
+    }
+
+    const balloonIds = new Set(state.course.balloons.map((balloon) => balloon.id));
+    for (const [id, meshes] of balloonMeshes) {
+      if (!balloonIds.has(id)) {
+        meshes.root.dispose();
+        balloonMeshes.delete(id);
+      }
+    }
+
+    // Balloons bob gently; popped ones vanish until they respawn ahead.
+    for (const balloon of state.course.balloons) {
+      let meshes = balloonMeshes.get(balloon.id);
+      if (!meshes || meshes.kind !== balloon.kind) {
+        meshes?.root.dispose();
+        meshes = createBalloonMeshes(balloon.id, balloon.kind, balloon.radius);
+        balloonMeshes.set(balloon.id, meshes);
+      }
+      meshes.root.position.set(
+        balloon.position.x,
+        balloon.position.y + Math.sin(elapsed * 1.6 + balloon.phase) * 1.1,
+        balloon.position.z,
+      );
+      meshes.root.setEnabled(!balloon.popped);
+    }
+
+    // Assign tracer meshes to live projectiles.
+    for (let i = 0; i < tracers.length; i += 1) {
+      const projectile = state.projectiles[i];
+      tracers[i].setEnabled(Boolean(projectile));
+      if (projectile) {
+        tracers[i].position.set(projectile.position.x, projectile.position.y, projectile.position.z);
+      }
+    }
+
+    // Balloon-burst flashes from this frame's events, then age them out.
+    for (const event of state.events) {
+      if (event.type === "balloon-pop" && event.position) {
+        triggerPopFlash(new Vector3(event.position.x, event.position.y, event.position.z), new Color3(1, 0.8, 0.3));
+      } else if (event.type === "repair" && event.position) {
+        triggerPopFlash(new Vector3(event.position.x, event.position.y, event.position.z), new Color3(0.4, 1, 0.5));
+      }
+    }
+    for (const flashSlot of popFlashes) {
+      if (flashSlot.age < 0) continue;
+      flashSlot.age += dt;
+      flashSlot.mesh.scaling.setAll(0.6 + flashSlot.age * 9);
+      flashSlot.material.alpha = Math.max(0, 0.85 - flashSlot.age * 3.4);
+      if (flashSlot.age > 0.3) {
+        flashSlot.age = -1;
+        flashSlot.mesh.setEnabled(false);
+      }
     }
   };
 

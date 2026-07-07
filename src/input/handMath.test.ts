@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { computeHandInputFromLandmarks, PITCH_FULL_SCALE, ROLL_FULL_SCALE, shapeAxis } from "./handMath";
+import { computeHandInputFromLandmarks, continuousLineAngle, PITCH_FULL_SCALE, ROLL_FULL_SCALE, shapeAxis } from "./handMath";
 import type { HandLandmark } from "../types";
 
 // Fixtures are in raw (non-mirrored) image coordinates: x right, y DOWN,
@@ -150,23 +150,54 @@ describe("computeHandInputFromLandmarks", () => {
     expect(input.pitch).toBe(0);
   });
 
-  test("calibration offsets shift the neutral pose", () => {
-    const tilted = makeHand("right", { roll: 0.2, pitch: 0.2 });
-    const uncalibrated = computeHandInputFromLandmarks(tilted, 1000);
-    const calibrated = computeHandInputFromLandmarks(tilted, 1000, {
-      rollAngle: uncalibrated.rollAngle,
-      pitchAngle: uncalibrated.pitchAngle,
-    });
+  test("reports thumb-index gap normalized by hand width", () => {
+    const open = makeHand("right");
+    const pinched = makeHand("right");
+    pinched[4] = { ...pinched[8] };
 
-    expect(uncalibrated.roll).toBeGreaterThan(0.05);
-    expect(calibrated.roll).toBeCloseTo(0, 2);
-    expect(calibrated.pitch).toBeCloseTo(0, 2);
+    const openInput = computeHandInputFromLandmarks(open, 1000);
+    const pinchedInput = computeHandInputFromLandmarks(pinched, 1040);
+
+    expect(openInput.thumbIndexDistance).toBeGreaterThan(0.6);
+    expect(pinchedInput.thumbIndexDistance).toBeLessThan(0.05);
+  });
+
+  test("tilted poses are shaped against fixed zero neutral angles", () => {
+    const tilted = makeHand("right", { roll: 0.2, pitch: 0.2 });
+    const input = computeHandInputFromLandmarks(tilted, 1000);
+
+    expect(input.roll).toBeGreaterThan(0.05);
+    expect(input.pitch).toBeGreaterThan(0.05);
   });
 
   test("returns empty input when landmarks are missing", () => {
     const input = computeHandInputFromLandmarks([], 1000);
     expect(input.tracked).toBe(false);
     expect(input.openHand).toBe(false);
+  });
+});
+
+describe("continuousLineAngle", () => {
+  test("passes the reading through when there is no history", () => {
+    expect(continuousLineAngle(null, 0.4)).toBeCloseTo(0.4, 5);
+  });
+
+  test("keeps the banking direction past vertical instead of flipping", () => {
+    // Hand at ~80deg right; the next frame is physically ~97deg, which the
+    // undirected line angle wraps to -83deg. Continuity must pick +97deg.
+    const unwrapped = continuousLineAngle(1.4, -1.45);
+    expect(unwrapped).toBeCloseTo(-1.45 + Math.PI, 5);
+    expect(unwrapped).toBeGreaterThan(1.4);
+  });
+
+  test("caps the unwrapped angle so it cannot wind up forever", () => {
+    const capped = continuousLineAngle(2.2, -0.8); // continuation would be 2.34
+    expect(capped).toBeLessThanOrEqual(Math.PI * 0.72);
+    expect(capped).toBeGreaterThan(2.2);
+  });
+
+  test("re-syncs as the hand comes back below vertical", () => {
+    expect(continuousLineAngle(1.69, 1.3)).toBeCloseTo(1.3, 5);
   });
 });
 

@@ -75,20 +75,33 @@ export function checkCourseCollision(course: CourseState, plane: PlaneState): Ob
   return course.obstacles.find((obstacle) => checkObstacleCollision(obstacle, plane)) ?? null;
 }
 
+export interface PassResult {
+  passed: number;
+  threaded: number;
+  bypassed: number;
+}
+
 // Threading a gate or tunnel opening scores full points; skirting around an
 // obstacle still counts the pass but pays less.
-export function updateObstaclePasses(course: CourseState, plane: PlaneState): number {
-  let passed = 0;
+export function updateObstaclePasses(course: CourseState, plane: PlaneState): PassResult {
+  const result: PassResult = { passed: 0, threaded: 0, bypassed: 0 };
   for (const obstacle of course.obstacles) {
     if (!obstacle.passed && obstacle.position.z > plane.position.z + obstacle.depth / 2) {
       obstacle.passed = true;
-      passed += 1;
+      result.passed += 1;
       if (obstacle.type === "gate" || obstacle.type === "tunnel") {
-        course.score += insideOpening(obstacle, plane) ? 100 : 25;
+        if (insideOpening(obstacle, plane)) {
+          course.score += 100;
+          result.threaded += 1;
+        } else {
+          course.score += 25;
+          result.bypassed += 1;
+        }
       } else {
         course.score += 50;
+        result.bypassed += 1;
       }
     }
   }
-  return passed;
+  return result;
 }

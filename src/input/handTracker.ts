@@ -1,33 +1,31 @@
 import { FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
-import { clamp } from "../math";
-import { computeHandInputFromLandmarks, createEmptyHandInput, NEUTRAL_CALIBRATION } from "./handMath";
-import type { HandCalibration, HandInputState, HandLandmark } from "../types";
-
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task";
-
-// Hold an open hand this long to capture the player's neutral pose. Camera
-// height and wrist posture vary per person, so "level" is measured, not
-// assumed.
-const CALIBRATION_HOLD_MS = 700;
-// Keep flying through brief tracking dips instead of snapping level.
-const OPEN_GRACE_MS = 280;
-// Exponential smoothing per camera frame (~30 Hz) to damp landmark jitter.
-const SMOOTHING = 0.45;
+import { createHandControlSession } from "./handControlSession";
+import {
+  createHandLandmarkerOptions,
+  describeHandTrackerFrame,
+  VISION_WASM_URL,
+} from "./handTrackerConfig";
+import { computeHandInputFromLandmarks, createEmptyHandInput } from "./handMath";
+import type { HandInputState, HandLandmark } from "../types";
 
 export interface HandTracker {
   state: HandInputState;
   status: string;
-  calibrated: boolean;
   initialize: () => Promise<void>;
-  recalibrate: () => void;
   update: (nowMs: number, debugVisible: boolean) => void;
+  stopCamera: () => void;
   dispose: () => void;
 }
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? 0;
+async function createLandmarker(
+  vision: Parameters<typeof HandLandmarker.createFromOptions>[0],
+): Promise<HandLandmarker> {
+  try {
+    return await HandLandmarker.createFromOptions(vision, createHandLandmarkerOptions("GPU"));
+  } catch (error) {
+    console.warn("GPU hand tracker failed; retrying on CPU.", error);
+    return HandLandmarker.createFromOptions(vision, createHandLandmarkerOptions("CPU"));
+  }
 }
 
 export function createHandTracker(video: HTMLVideoElement, debugCanvas: HTMLCanvasElement): HandTracker {
@@ -37,40 +35,17 @@ export function createHandTracker(video: HTMLVideoElement, debugCanvas: HTMLCanv
   let lastDetectMs = 0;
   let latestLandmarks: HandLandmark[] = [];
   let status = "Camera idle";
-  const state = createEmptyHandInput();
-
-  let calibration: HandCalibration | null = null;
-  let calibrationStartMs = 0;
-  let rollSamples: number[] = [];
-  let pitchSamples: number[] = [];
-  let lastOpenMs = Number.NEGATIVE_INFINITY;
-  let smoothRoll = 0;
-  let smoothPitch = 0;
-
-  const resetCalibration = (): void => {
-    calibration = null;
-    calibrationStartMs = 0;
-    rollSamples = [];
-    pitchSamples = [];
-  };
+  const controlSession = createHandControlSession();
+  const state = controlSession.state;
 
   const initialize = async (): Promise<void> => {
     try {
-      status = "Loading hand tracker";
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
-      );
-      landmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: MODEL_URL,
-          delegate: "GPU",
-        },
-        runningMode: "VIDEO",
-        numHands: 1,
-        minHandDetectionConfidence: 0.55,
-        minHandPresenceConfidence: 0.55,
-        minTrackingConfidence: 0.5,
-      });
+      if (stream) return;
+      if (!landmarker) {
+        status = "Loading hand tracker";
+        const vision = await FilesetResolver.forVisionTasks(VISION_WASM_URL);
+        landmarker = await createLandmarker(vision);
+      }
 
       status = "Requesting camera";
       stream = await navigator.mediaDevices.getUserMedia({
@@ -88,6 +63,20 @@ export function createHandTracker(video: HTMLVideoElement, debugCanvas: HTMLCanv
       status = error instanceof Error ? `Camera fallback: ${error.message}` : "Camera fallback active";
       Object.assign(state, createEmptyHandInput(performance.now()));
     }
+  };
+
+  const stopCamera = (): void => {
+    for (const track of stream?.getTracks() ?? []) {
+      track.stop();
+    }
+    stream = null;
+    video.pause();
+    video.srcObject = null;
+    lastVideoTime = -1;
+    latestLandmarks = [];
+    status = "Camera idle";
+    Object.assign(state, createEmptyHandInput(performance.now()));
+    drawDebug(false);
   };
 
   const drawDebug = (debugVisible: boolean): void => {
@@ -175,91 +164,56 @@ export function createHandTracker(video: HTMLVideoElement, debugCanvas: HTMLCanv
   };
 
   const update = (nowMs: number, debugVisible: boolean): void => {
-    if (landmarker && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.currentTime !== lastVideoTime) {
+    if (!stream) {
+      status = "Camera idle";
+      drawDebug(debugVisible);
+      return;
+    }
+
+    const hasVideoFrame = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+    if (landmarker && !hasVideoFrame) {
+      status = describeHandTrackerFrame({
+        hasVideoFrame,
+        detectionHiccup: false,
+        landmarkCount: latestLandmarks.length,
+      }) ?? status;
+    }
+
+    if (landmarker && hasVideoFrame && video.currentTime !== lastVideoTime) {
       // MediaPipe requires strictly increasing timestamps and throws
       // otherwise; never let a tracking hiccup kill the render loop.
       const detectMs = Math.max(nowMs, lastDetectMs + 1);
       lastDetectMs = detectMs;
       let raw = createEmptyHandInput(nowMs);
+      let detectionHiccup = false;
       try {
         const result = landmarker.detectForVideo(video, detectMs);
         latestLandmarks = (result.landmarks[0] ?? []) as HandLandmark[];
         if (latestLandmarks.length > 0) {
-          raw = computeHandInputFromLandmarks(latestLandmarks, nowMs, calibration ?? NEUTRAL_CALIBRATION);
+          raw = computeHandInputFromLandmarks(latestLandmarks, nowMs);
         }
       } catch {
         latestLandmarks = [];
-        status = "Tracking hiccup, recovering";
+        detectionHiccup = true;
       }
       lastVideoTime = video.currentTime;
 
-      let targetRoll = 0;
-      let targetPitch = 0;
-      let controlling = false;
-
-      if (raw.tracked && raw.openHand) {
-        lastOpenMs = nowMs;
-        controlling = true;
-        if (!calibration) {
-          if (calibrationStartMs === 0) calibrationStartMs = nowMs;
-          rollSamples.push(raw.rollAngle);
-          pitchSamples.push(raw.pitchAngle);
-          if (nowMs - calibrationStartMs >= CALIBRATION_HOLD_MS) {
-            calibration = {
-              rollAngle: clamp(median(rollSamples), -0.5, 0.5),
-              pitchAngle: clamp(median(pitchSamples), -0.7, 0.7),
-            };
-            status = "Calibrated - you have the controls";
-          } else {
-            status = "Hold your hand level to calibrate";
-          }
-          // Plane stays neutral while the neutral pose is being captured.
-        } else {
-          targetRoll = raw.roll;
-          targetPitch = raw.pitch;
-          status = "Hand control active";
-        }
-      } else {
-        if (!calibration) {
-          calibrationStartMs = 0;
-          rollSamples = [];
-          pitchSamples = [];
-        }
-        if (nowMs - lastOpenMs < OPEN_GRACE_MS) {
-          controlling = true;
-          targetRoll = smoothRoll;
-          targetPitch = smoothPitch;
-        } else if (raw.tracked) {
-          status = "Spread your fingers to take control";
-        } else if (stream) {
-          status = "Show your hand to the camera";
-        }
-      }
-
-      smoothRoll += (targetRoll - smoothRoll) * SMOOTHING;
-      smoothPitch += (targetPitch - smoothPitch) * SMOOTHING;
-
-      state.tracked = raw.tracked || controlling;
-      state.openHand = controlling;
-      state.confidence = raw.tracked ? raw.confidence : controlling ? 0.3 : 0;
-      state.roll = smoothRoll;
-      state.pitch = smoothPitch;
-      state.rollAngle = raw.rollAngle;
-      state.pitchAngle = raw.pitchAngle;
-      state.openScore = raw.openScore;
-      state.lastSeenMs = raw.tracked ? nowMs : state.lastSeenMs;
-      state.source = state.tracked ? "mediapipe" : "none";
+      controlSession.update(raw, nowMs);
+      status =
+        describeHandTrackerFrame({
+          hasVideoFrame,
+          detectionHiccup,
+          landmarkCount: latestLandmarks.length,
+        }) ?? controlSession.status;
     }
 
     drawDebug(debugVisible);
   };
 
   const dispose = (): void => {
-    for (const track of stream?.getTracks() ?? []) {
-      track.stop();
-    }
-    stream = null;
+    stopCamera();
     landmarker?.close();
+    landmarker = null;
   };
 
   return {
@@ -267,15 +221,9 @@ export function createHandTracker(video: HTMLVideoElement, debugCanvas: HTMLCanv
     get status() {
       return status;
     },
-    get calibrated() {
-      return calibration !== null;
-    },
     initialize,
-    recalibrate: () => {
-      resetCalibration();
-      status = "Recalibrating - hold your hand level";
-    },
     update,
+    stopCamera,
     dispose,
   };
 }

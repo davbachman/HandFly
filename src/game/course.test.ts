@@ -3,30 +3,98 @@ import { createCourse, getVisibleObstacles, updateCourse } from "./course";
 import { createInitialPlaneState } from "./flight";
 import { checkCourseCollision, updateObstaclePasses } from "./collision";
 
+function minimumAdjacentGap(course: ReturnType<typeof createCourse>): number {
+  return Math.min(
+    ...course.obstacles.slice(1).map((obstacle, obstacleIndex) => course.obstacles[obstacleIndex].position.z - obstacle.position.z),
+  );
+}
+
 describe("endless course", () => {
-  test("starts with varied obstacle types ahead of the plane", () => {
+  test("starts with varied obstacle types after an open warm-up stretch", () => {
     const course = createCourse(7);
     const visible = getVisibleObstacles(course, 0);
 
-    expect(visible.length).toBeGreaterThanOrEqual(8);
+    expect(visible.length).toBeGreaterThanOrEqual(4);
     expect(new Set(visible.map((obstacle) => obstacle.type))).toEqual(
       new Set(["gate", "tunnel", "bridge", "mountain"]),
     );
-    expect(visible.every((obstacle) => obstacle.position.z < 0)).toBe(true);
+    // Grace period: nothing to hit until the player has had time to get
+    // their hand up and into position.
+    expect(course.obstacles.every((obstacle) => obstacle.position.z < -380)).toBe(true);
+  });
+
+  test("keeps a wide minimum gap between obstacles throughout the run", () => {
+    const courses = Array.from({ length: 20 }, (_, index) => createCourse(index + 1));
+    const initialMinimumGap = Math.min(...courses.map(minimumAdjacentGap));
+
+    for (const course of courses) {
+      updateCourse(course, -9000);
+    }
+    const recycledMinimumGap = Math.min(...courses.map(minimumAdjacentGap));
+
+    expect(initialMinimumGap).toBeGreaterThanOrEqual(110);
+    expect(recycledMinimumGap).toBeGreaterThanOrEqual(110);
   });
 
   test("recycles obstacles and increases score after passing them", () => {
     const course = createCourse(7);
     const plane = createInitialPlaneState();
-    plane.position.z = -180;
+    plane.position.z = -560;
 
-    const passed = updateObstaclePasses(course, plane);
+    const passes = updateObstaclePasses(course, plane);
     updateCourse(course, plane.position.z);
 
-    expect(passed).toBeGreaterThan(0);
+    expect(passes.passed).toBeGreaterThan(0);
     expect(course.score).toBeGreaterThan(0);
     expect(course.obstacles.length).toBeGreaterThanOrEqual(12);
-    expect(Math.min(...course.obstacles.map((obstacle) => obstacle.position.z))).toBeLessThan(-400);
+    expect(Math.min(...course.obstacles.map((obstacle) => obstacle.position.z))).toBeLessThan(-700);
+  });
+
+  test("leaves target balloons out of the default course", () => {
+    const course = createCourse(7);
+
+    expect(course.balloons).toEqual([]);
+  });
+
+  test("gallery balloons spawn and respawn ahead once passed", () => {
+    const course = createCourse(7, { targetsEnabled: true });
+    expect(course.balloons.length).toBeGreaterThanOrEqual(4);
+    expect(course.balloons[0].position.z).toBe(-250); // warm-up teaching balloon
+    expect(course.balloons.every((balloon) => balloon.kind === "score")).toBe(true);
+
+    const balloon = course.balloons[0];
+    balloon.popped = true;
+    updateCourse(course, -1200);
+
+    expect(balloon.popped).toBe(false);
+    expect(balloon.position.z).toBeLessThan(-1700);
+    expect(Math.abs(balloon.position.x)).toBeLessThanOrEqual(36);
+  });
+
+  test("gallery balloon respawns vary without obstacle recycling", () => {
+    const course = createCourse(7, { targetsEnabled: true });
+    course.obstacles = [];
+
+    const respawnPositions = course.balloons.map((balloon) => {
+      balloon.position.z = 100;
+      updateCourse(course, 0);
+      return { x: balloon.position.x, y: balloon.position.y };
+    });
+
+    const respawnLanes = respawnPositions.map((position) => `${position.x.toFixed(2)},${position.y.toFixed(2)}`);
+    const xValues = respawnPositions.map((position) => position.x);
+
+    expect(new Set(respawnLanes).size).toBeGreaterThan(3);
+    expect(Math.max(...xValues) - Math.min(...xValues)).toBeGreaterThan(18);
+  });
+
+  test("obstacle-course balloons are sparse repair targets", () => {
+    const galleryCourse = createCourse(7, { targetsEnabled: true });
+    const obstacleCourse = createCourse(7, { targetsEnabled: true, balloonMode: "obstacle-course" });
+
+    expect(obstacleCourse.balloons.length).toBeGreaterThan(0);
+    expect(obstacleCourse.balloons.length).toBeLessThan(galleryCourse.balloons.length);
+    expect(obstacleCourse.balloons.every((balloon) => balloon.kind === "repair")).toBe(true);
   });
 
   test("threading an opening scores more than skirting around it", () => {
@@ -142,4 +210,3 @@ describe("endless course", () => {
     expect(checkCourseCollision({ ...course, obstacles: [course.obstacles[1]] }, plane)?.type).toBe("mountain");
   });
 });
-

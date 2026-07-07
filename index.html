@@ -11,20 +11,36 @@
       <video id="camera-feed" playsinline muted></video>
       <canvas id="debug-canvas" aria-label="Hand tracking debug overlay"></canvas>
       <div id="hud" aria-live="polite"></div>
+      <div id="control-warning" class="hidden" role="alert"></div>
       <div id="menu">
         <div class="menu-panel">
           <h1>HandFly</h1>
           <p>
-            Show your open hand to the camera, fingers spread, pointing at the screen.
-            Hold it level for a moment to calibrate, then tilt it like a joystick to bank
-            and pitch. Make a fist to let go. Keyboard: WASD or arrows, Shift to boost,
-            H for the camera debug view, C to recalibrate.
+            Hold a level open hand in view, fingers spread, fingertips aimed toward the
+            camera. Tilt left or right to bank; tip your fingers up or down to climb or
+            dive. Make a fist to release control. You get open air before the first
+            obstacle, and your hull survives two hits; the third is fatal. Obstacle
+            Course includes occasional repair balloons: shoot them to heal, but hitting
+            one hurts. Space fires in Obstacle Course and Shooting Gallery. Flying
+            Practice has no obstacles and shows the live camera/hand landmarks.
+            Shooting Gallery has balloons only; shoot them
+            before you hit them. Keyboard: WASD or arrows steer, Esc quits active
+            modes to the menu, H toggles debug, M toggles sound.
           </p>
-          <button id="start-btn" type="button">Start Flight</button>
+          <div class="menu-actions">
+            <button id="practice-btn" type="button" title="Fly freely with no obstacles and a live camera preview.">
+              Flying Practice
+            </button>
+            <button id="gallery-btn" type="button" class="secondary" title="Shoot balloon targets before they hit you.">
+              Shooting Gallery
+            </button>
+            <button id="start-btn" type="button" class="secondary" title="Fly the full obstacle course with repair balloons.">
+              Obstacle Course
+            </button>
+          </div>
         </div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
-

@@ -11,7 +11,6 @@ export function createKeyboardController(target: Window = window): KeyboardContr
     rollAxis: 0,
     pitchAxis: 0,
     fire: false,
-    boost: false,
   };
 
   const updateState = (): void => {
@@ -22,7 +21,6 @@ export function createKeyboardController(target: Window = window): KeyboardContr
     state.rollAxis = (right ? 1 : 0) - (left ? 1 : 0);
     state.pitchAxis = (up ? 1 : 0) - (down ? 1 : 0);
     state.fire = pressed.has("Space");
-    state.boost = pressed.has("ShiftLeft") || pressed.has("ShiftRight");
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
@@ -38,15 +36,34 @@ export function createKeyboardController(target: Window = window): KeyboardContr
     updateState();
   };
 
+  // If focus leaves while a key is held, its keyup never arrives and the
+  // latched axis would override hand input forever. Release everything.
+  const releaseAll = (): void => {
+    pressed.clear();
+    updateState();
+  };
+  const onVisibilityChange = (): void => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      releaseAll();
+    }
+  };
+
   target.addEventListener("keydown", onKeyDown);
   target.addEventListener("keyup", onKeyUp);
+  target.addEventListener("blur", releaseAll);
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibilityChange);
+  }
 
   return {
     state,
     dispose: () => {
       target.removeEventListener("keydown", onKeyDown);
       target.removeEventListener("keyup", onKeyUp);
+      target.removeEventListener("blur", releaseAll);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
     },
   };
 }
-
