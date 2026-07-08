@@ -2,7 +2,7 @@
 
 [Open the app](https://davbachman.github.io/HandFly/)
 
-Created by David Bachman with GPT 5.5. To learn more about David see https://pzacad.pitzer.edu/~dbachman/, and subscribe to his AI blog *Entropy Bonus* at https://profbachman.substack.com/.
+Created by David Bachman with GPT 5.5 and Fable 5. To learn more about David see https://pzacad.pitzer.edu/~dbachman/, and subscribe to his AI blog *Entropy Bonus* at https://profbachman.substack.com/.
 
 ## Brief description
 
