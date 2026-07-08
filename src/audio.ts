@@ -1,4 +1,4 @@
-import type { GameState } from "./types";
+import type { GameMode, GameState } from "./types";
 
 // All sound is synthesized with the Web Audio API - no assets to load. The
 // context is created on the first user gesture (browser autoplay policy);
@@ -9,6 +9,10 @@ export interface GameAudio {
   update: (state: GameState) => void;
   toggleMuted: () => boolean;
   readonly muted: boolean;
+}
+
+export function engineGainForMode(mode: GameMode): number {
+  return mode === "flying" || mode === "shooting-gallery" || mode === "practice" ? 0.13 : 0;
 }
 
 export function createGameAudio(): GameAudio {
@@ -108,7 +112,7 @@ export function createGameAudio(): GameAudio {
     const engineHz = 58 + state.plane.speed * 0.55;
     engineOscA.frequency.setTargetAtTime(engineHz, now, 0.08);
     engineOscB.frequency.setTargetAtTime(engineHz * 1.011, now, 0.08);
-    engineGain.gain.setTargetAtTime(state.mode === "flying" ? 0.13 : 0.03, now, 0.2);
+    engineGain.gain.setTargetAtTime(engineGainForMode(state.mode), now, 0.2);
 
     for (const event of state.events) {
       switch (event.type) {

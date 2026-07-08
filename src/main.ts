@@ -1,6 +1,6 @@
 import "./styles.css";
 import { createGameAudio } from "./audio";
-import { shouldEscapeReturnToMenu, shouldStopCameraForMode } from "./game/modeTransitions";
+import { shouldEscapeReturnToMenu, shouldReturnToMenuAfterCrash, shouldStopCameraForMode } from "./game/modeTransitions";
 import { createGameState, createObstacleCourseState, createPracticeModeState, createShootingGalleryState, renderGameStateToText } from "./game/stateText";
 import { resetGameState, stepGame } from "./game/simulation";
 import { createHandTracker } from "./input/handTracker";
@@ -151,22 +151,11 @@ function updateHud(): void {
   updateControlWarning();
   document.body.classList.toggle("debug-visible", state.debugVisible || state.mode === "practice");
   document.body.classList.toggle("practice-mode", state.mode === "practice");
-  // Hold the crash overlay back long enough to watch the explosion.
-  const showCrashUi = state.mode === "crashed" && state.elapsedMs - state.lastHitMs >= 1100;
-  document.body.classList.toggle("crashed", showCrashUi);
+  document.body.classList.toggle("crashed", false);
   menu.classList.toggle(
     "hidden",
-    state.mode === "flying" ||
-      state.mode === "practice" ||
-      state.mode === "shooting-gallery" ||
-      (state.mode === "crashed" && !showCrashUi),
+    state.mode === "flying" || state.mode === "practice" || state.mode === "shooting-gallery" || state.mode === "crashed",
   );
-  if (showCrashUi) {
-    startButton.textContent = "Restart Flight";
-    const panelText = menu.querySelector("p");
-    const bestText = best ? ` Best so far: ${best.score} pts, ${best.distance}m.` : "";
-    if (panelText) panelText.textContent = `${state.crashReason ?? "You clipped the course."} Score ${state.course.score}, distance ${Math.max(0, Math.round(-state.plane.position.z))}m.${bestText} Press Enter or the button to fly again.`;
-  }
 }
 
 function updateFrame(dt: number, nowMs: number): void {
@@ -174,6 +163,9 @@ function updateFrame(dt: number, nowMs: number): void {
   stepGame(state, dt);
   if (state.mode === "crashed" && prevMode === "flying") {
     recordFlight();
+  }
+  if (shouldReturnToMenuAfterCrash(state.mode, state.elapsedMs, state.lastHitMs)) {
+    exitToMenu();
   }
   stopCameraIfGameStopped();
   prevMode = state.mode;

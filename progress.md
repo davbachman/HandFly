@@ -142,6 +142,12 @@ Terrain strip depth fix (July 2026):
 - Fixed green ground bleed-through on the blue river and pale path strips by raising those decorative strip meshes well above the recycled terrain tiles.
 - Root cause was near-coplanar depth fighting between large `CreateGround` strip overlays and the underlying terrain, most visible at low/grazing chase-camera angles after longer runs.
 
+Crash menu/audio fix (July 2026):
+- Root cause of the legacy "Restart Flight" menu after obstacle-course death: `updateHud()` mutated the original splash DOM when showing the crash overlay, changing the start button and menu paragraph instead of returning to the real splash menu.
+- Added a crash-return transition policy so fatal crashes stay hidden only through the explosion delay, then reset back to `mode: "menu"` with the original splash buttons/copy.
+- Engine audio now has zero gain in `menu` and `crashed` modes; active flight modes remain audible when audio has been unlocked.
+- Verification included failing-first regression tests for crash return/audio gain, browser DOM repro before/after the fix, a web-game smoke run, and visual inspection of the returned splash menu screenshot.
+
 Follow-ups:
 - Optimize Babylon/MediaPipe bundle splitting before publishing to a bandwidth-sensitive host.
 - Tune hand-feel thresholds (deadzone/expo/full-scale angles in handMath.ts) after real hand-tracking play sessions.
