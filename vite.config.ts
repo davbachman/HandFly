@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  base: "/HandFly/",
   server: {
     host: "127.0.0.1",
     port: 5173,
@@ -10,4 +11,3 @@ export default defineConfig({
     port: 4173,
   },
 });
-
