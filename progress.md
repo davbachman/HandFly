@@ -148,6 +148,12 @@ Crash menu/audio fix (July 2026):
 - Engine audio now has zero gain in `menu` and `crashed` modes; active flight modes remain audible when audio has been unlocked.
 - Verification included failing-first regression tests for crash return/audio gain, browser DOM repro before/after the fix, a web-game smoke run, and visual inspection of the returned splash menu screenshot.
 
+Crash reset steering/camera fix (July 2026):
+- Root cause of the post-crash hard veer: chase-camera lateral smoothing kept its pre-crash `cameraX` after the run reset, so a crash near either edge could make the newly centered plane appear offset and slow to respond for a moment.
+- Added a camera-rig helper that preserves lateral camera lag only during active flight modes and snaps the camera to the reset plane position in menu/crashed states.
+- Resetting/stopping the hand tracker now clears the private hand-control smoothing and open-hand grace state, not just the public input snapshot, so stale steering cannot bleed into the next run.
+- Verification: focused camera/hand-control regression tests pass, full `npm test` is 83/83, production build passes, the web-game smoke run rendered cleanly, and a forced browser crash at `x=58` returned to menu and restarted at centered `x=0` with neutral controls.
+
 Follow-ups:
 - Optimize Babylon/MediaPipe bundle splitting before publishing to a bandwidth-sensitive host.
 - Tune hand-feel thresholds (deadzone/expo/full-scale angles in handMath.ts) after real hand-tracking play sessions.

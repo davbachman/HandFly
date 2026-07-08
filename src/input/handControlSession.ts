@@ -17,6 +17,7 @@ export interface HandControlSession {
   state: HandInputState;
   status: string;
   update: (raw: HandInputState, nowMs: number) => void;
+  reset: (nowMs?: number) => void;
 }
 
 export function createHandControlSession(): HandControlSession {
@@ -27,6 +28,16 @@ export function createHandControlSession(): HandControlSession {
   let smoothPitch = 0;
   let trackedRollAngle: number | null = null;
   let previousControlOpen = false;
+
+  const reset = (nowMs = 0): void => {
+    status = "Show an open hand, fingers spread";
+    lastOpenMs = Number.NEGATIVE_INFINITY;
+    smoothRoll = 0;
+    smoothPitch = 0;
+    trackedRollAngle = null;
+    previousControlOpen = false;
+    Object.assign(state, createEmptyHandInput(nowMs));
+  };
 
   const update = (raw: HandInputState, nowMs: number): void => {
     let targetRoll = 0;
@@ -89,5 +100,6 @@ export function createHandControlSession(): HandControlSession {
       return status;
     },
     update,
+    reset,
   };
 }

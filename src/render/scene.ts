@@ -15,8 +15,8 @@ import {
 } from "@babylonjs/core";
 import { BRIDGE_TOWER_HALF_WIDTH, BRIDGE_TOWER_INSET, BRIDGE_TOWER_RISE } from "../game/collision";
 import { getVisibleObstacles } from "../game/course";
-import { damp } from "../math";
 import type { GameState, Obstacle } from "../types";
+import { nextChaseCameraX } from "./cameraRig";
 import { TERRAIN_STRIP_SURFACE_Y } from "./terrainDepth";
 
 interface ObstacleMeshes {
@@ -772,7 +772,7 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
 
     // Chase camera lags the plane slightly and leans into the bank; recent
     // hits rattle it.
-    cameraX = damp(cameraX, state.plane.position.x, 7.5, dt);
+    cameraX = nextChaseCameraX(cameraX, state.plane.position.x, dt, state.mode);
     camera.position.set(cameraX, state.plane.position.y + 4.8, state.plane.position.z + 34);
     if (sinceHitMs >= 0 && sinceHitMs < 650) {
       const shakeAmp = (crashed ? 1.9 : 0.9) * (1 - sinceHitMs / 650);

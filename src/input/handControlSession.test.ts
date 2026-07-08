@@ -151,4 +151,18 @@ describe("createHandControlSession", () => {
 
     expect(session.state.fire).toBe(false);
   });
+
+  test("reset clears held steering and open-hand grace between runs", () => {
+    const session = createHandControlSession();
+
+    session.update(rawHand({ rollAngle: 0.85, pitchAngle: 0.4, lastSeenMs: 1000 }), 1000);
+    expect(session.state.roll).toBeGreaterThan(0.55);
+
+    session.reset(1060);
+    session.update(noHand(1080), 1080);
+
+    expect(session.state.openHand).toBe(false);
+    expect(session.state.roll).toBe(0);
+    expect(session.state.pitch).toBe(0);
+  });
 });

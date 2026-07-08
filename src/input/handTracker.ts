@@ -61,7 +61,7 @@ export function createHandTracker(video: HTMLVideoElement, debugCanvas: HTMLCanv
       status = "Show an open hand, fingers spread";
     } catch (error) {
       status = error instanceof Error ? `Camera fallback: ${error.message}` : "Camera fallback active";
-      Object.assign(state, createEmptyHandInput(performance.now()));
+      controlSession.reset(performance.now());
     }
   };
 
@@ -75,7 +75,7 @@ export function createHandTracker(video: HTMLVideoElement, debugCanvas: HTMLCanv
     lastVideoTime = -1;
     latestLandmarks = [];
     status = "Camera idle";
-    Object.assign(state, createEmptyHandInput(performance.now()));
+    controlSession.reset(performance.now());
     drawDebug(false);
   };
 
