@@ -31,9 +31,11 @@ const debugCanvas = requiredElement<HTMLCanvasElement>("#debug-canvas");
 const hud = requiredElement<HTMLDivElement>("#hud");
 const controlWarning = requiredElement<HTMLDivElement>("#control-warning");
 const menu = requiredElement<HTMLDivElement>("#menu");
+const menuStatus = requiredElement<HTMLParagraphElement>("#menu-status");
 const startButton = requiredElement<HTMLButtonElement>("#start-btn");
 const galleryButton = requiredElement<HTMLButtonElement>("#gallery-btn");
 const practiceButton = requiredElement<HTMLButtonElement>("#practice-btn");
+const modeButtons = [practiceButton, galleryButton, startButton];
 
 const state = createGameState();
 const keyboard = createKeyboardController();
@@ -307,4 +309,9 @@ window.addEventListener("beforeunload", () => {
 flyScene.update(state, 1 / 60);
 flyScene.render();
 updateHud();
+for (const button of modeButtons) {
+  button.disabled = false;
+}
+menuStatus.textContent = "Choose a flight mode.";
+document.documentElement.setAttribute("data-handfly-startup", "ready");
 requestAnimationFrame(animate);

@@ -154,7 +154,14 @@ Crash reset steering/camera fix (July 2026):
 - Resetting/stopping the hand tracker now clears the private hand-control smoothing and open-hand grace state, not just the public input snapshot, so stale steering cannot bleed into the next run.
 - Verification: focused camera/hand-control regression tests pass, full `npm test` is 83/83, production build passes, the web-game smoke run rendered cleanly, and a forced browser crash at `x=58` returned to menu and restarted at centered `x=0` with neutral controls.
 
+GitHub Pages splash-menu accessibility fix (July 2026):
+- Reproduced all three published mode buttons successfully in desktop Chromium, then reproduced a clipped, non-scrollable splash menu at a short 844x390 landscape viewport.
+- Moved the mode choices above the long instructions, made the fixed menu vertically scrollable on short/mobile viewports, and added compact short-screen spacing.
+- The static HTML buttons now remain disabled while the large 3D bundle initializes, with visible loading/slow-load/failure status instead of appearing tappable before event handlers exist. Startup enables them only after the scene and handlers are ready.
+- Replaced the package-wide Babylon barrel with exact engine/camera/material and pure mesh-builder imports. Production output dropped from a 4,554 kB entry chunk and 42.7 kB preload-heavy HTML to a 787 kB entry chunk and 4.2 kB HTML, substantially reducing the dead-looking startup window on GitHub Pages.
+- Verification: 84/84 unit tests pass; production build passes; the bundled web-game client entered Flying Practice, Shooting Gallery (including a fired projectile), and Obstacle Course with no console errors; screenshots were visually checked; and an 844x390 production-preview capture shows all three ready buttons above the fold.
+
 Follow-ups:
-- Optimize Babylon/MediaPipe bundle splitting before publishing to a bandwidth-sensitive host.
+- Consider lazy-loading MediaPipe after mode selection to reduce the remaining 787 kB entry bundle further on bandwidth-sensitive hosts.
 - Tune hand-feel thresholds (deadzone/expo/full-scale angles in handMath.ts) after real hand-tracking play sessions.
 - Vary balloon spawns with difficulty (fewer repairs deeper in) and consider enemy targets that shoot back.

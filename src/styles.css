@@ -150,9 +150,13 @@ button {
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
   padding: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: linear-gradient(rgba(26, 57, 79, 0.24), rgba(16, 31, 42, 0.34));
   z-index: 5;
 }
@@ -163,6 +167,8 @@ button {
 
 .menu-panel {
   width: min(430px, 100%);
+  flex: 0 0 auto;
+  margin: auto;
   padding: 28px;
   border: 1px solid rgba(255, 255, 255, 0.36);
   border-radius: 8px;
@@ -178,9 +184,21 @@ button {
 }
 
 .menu-panel p {
-  margin: 0 0 18px;
+  margin: 0;
   line-height: 1.5;
   color: rgba(245, 249, 255, 0.88);
+}
+
+.menu-panel .menu-status {
+  min-height: 24px;
+  margin-bottom: 14px;
+  color: #dcecff;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.menu-panel .menu-instructions {
+  margin-top: 18px;
 }
 
 .menu-toggle {
@@ -222,6 +240,11 @@ button {
   color: #f8fbff;
 }
 
+.menu-panel button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 .menu-panel button:focus-visible {
   outline: 3px solid #ffffff;
   outline-offset: 3px;
@@ -255,5 +278,20 @@ button {
 
   .menu-panel {
     padding: 22px;
+  }
+}
+
+@media (max-height: 520px) {
+  #menu {
+    padding: 12px;
+  }
+
+  .menu-panel {
+    margin-block: 0;
+    padding: 18px;
+  }
+
+  .menu-panel h1 {
+    font-size: 2.2rem;
   }
 }

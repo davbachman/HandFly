@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-handfly-startup="loading">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -15,7 +15,21 @@
       <div id="menu">
         <div class="menu-panel">
           <h1>HandFly</h1>
-          <p>
+          <p id="menu-status" class="menu-status" role="status">
+            Loading flight systems…
+          </p>
+          <div class="menu-actions">
+            <button id="practice-btn" type="button" title="Fly freely with no obstacles and a live camera preview." disabled>
+              Flying Practice
+            </button>
+            <button id="gallery-btn" type="button" class="secondary" title="Shoot balloon targets before they hit you." disabled>
+              Shooting Gallery
+            </button>
+            <button id="start-btn" type="button" class="secondary" title="Fly the full obstacle course with repair balloons." disabled>
+              Obstacle Course
+            </button>
+          </div>
+          <p class="menu-instructions">
             Hold a level open hand in view, fingers spread, fingertips aimed toward the
             camera. Tilt left or right to bank; tip your fingers up or down to climb or
             dive. Make a fist to release control. You get open air before the first
@@ -27,20 +41,32 @@
             before you hit them. Keyboard: WASD or arrows steer, Esc quits active
             modes to the menu, H toggles debug, M toggles sound.
           </p>
-          <div class="menu-actions">
-            <button id="practice-btn" type="button" title="Fly freely with no obstacles and a live camera preview.">
-              Flying Practice
-            </button>
-            <button id="gallery-btn" type="button" class="secondary" title="Shoot balloon targets before they hit you.">
-              Shooting Gallery
-            </button>
-            <button id="start-btn" type="button" class="secondary" title="Fly the full obstacle course with repair balloons.">
-              Obstacle Course
-            </button>
-          </div>
         </div>
       </div>
     </div>
-    <script type="module" src="/src/main.ts"></script>
+    <script id="handfly-entry" type="module" src="/src/main.ts"></script>
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var status = document.querySelector("#menu-status");
+        var entry = document.querySelector("#handfly-entry, script[type='module'][src]");
+        function isLoading() {
+          return root.getAttribute("data-handfly-startup") === "loading";
+        }
+        function showLoadFailure() {
+          if (!isLoading() || !status) return;
+          root.setAttribute("data-handfly-startup", "failed");
+          status.textContent = "Game failed to load. Reload the page or try an updated browser.";
+        }
+
+        if (entry) entry.addEventListener("error", showLoadFailure);
+        window.addEventListener("unhandledrejection", showLoadFailure);
+        window.setTimeout(function () {
+          if (isLoading() && status) {
+            status.textContent = "Still loading the 3D flight systems…";
+          }
+        }, 8000);
+      })();
+    </script>
   </body>
 </html>

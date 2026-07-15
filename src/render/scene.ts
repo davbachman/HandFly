@@ -1,18 +1,21 @@
-import {
-  Color3,
-  Color4,
-  DirectionalLight,
-  Engine,
-  FreeCamera,
-  HemisphericLight,
-  Mesh,
-  MeshBuilder,
-  PBRMaterial,
-  Scene,
-  StandardMaterial,
-  TransformNode,
-  Vector3,
-} from "@babylonjs/core";
+import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
+import { Engine } from "@babylonjs/core/Engines/engine";
+import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
+import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
+import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder.pure";
+import { CreateCylinder } from "@babylonjs/core/Meshes/Builders/cylinderBuilder.pure";
+import { CreateDisc } from "@babylonjs/core/Meshes/Builders/discBuilder.pure";
+import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder.pure";
+import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder.pure";
+import { CreateTorus } from "@babylonjs/core/Meshes/Builders/torusBuilder.pure";
+import { CreateTube } from "@babylonjs/core/Meshes/Builders/tubeBuilder.pure";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { Scene } from "@babylonjs/core/scene";
 import { BRIDGE_TOWER_HALF_WIDTH, BRIDGE_TOWER_INSET, BRIDGE_TOWER_RISE } from "../game/collision";
 import { getVisibleObstacles } from "../game/course";
 import type { GameState, Obstacle } from "../types";
@@ -59,7 +62,7 @@ function createSpar(
   tipChord: number,
   thickness: number,
 ): Mesh {
-  const spar = MeshBuilder.CreateCylinder(
+  const spar = CreateCylinder(
     name,
     { height: length, diameterBottom: rootChord, diameterTop: tipChord, tessellation: 4 },
     scene,
@@ -87,13 +90,13 @@ function buildPlane(scene: Scene): PlayerPlane {
 
   // Cylinder tops face -z after the rotation: wide cowl forward, tapering
   // toward the tail.
-  const fuselage = MeshBuilder.CreateCylinder("plane-fuselage", { diameterTop: 1.3, diameterBottom: 0.45, height: 7.2, tessellation: 12 }, scene);
+  const fuselage = CreateCylinder("plane-fuselage", { diameterTop: 1.3, diameterBottom: 0.45, height: 7.2, tessellation: 12 }, scene);
   fuselage.rotation.x = -Math.PI / 2;
   fuselage.convertToFlatShadedMesh();
   fuselage.material = red;
   fuselage.parent = root;
 
-  const cowl = MeshBuilder.CreateCylinder("plane-cowl", { diameter: 1.42, height: 0.7, tessellation: 12 }, scene);
+  const cowl = CreateCylinder("plane-cowl", { diameter: 1.42, height: 0.7, tessellation: 12 }, scene);
   cowl.rotation.x = -Math.PI / 2;
   cowl.position.z = -3.75;
   cowl.convertToFlatShadedMesh();
@@ -106,17 +109,17 @@ function buildPlane(scene: Scene): PlayerPlane {
   propeller.position.z = -4.28;
   propeller.parent = root;
 
-  const spinner = MeshBuilder.CreateCylinder("plane-spinner", { diameterTop: 0, diameterBottom: 0.52, height: 0.85, tessellation: 8 }, scene);
+  const spinner = CreateCylinder("plane-spinner", { diameterTop: 0, diameterBottom: 0.52, height: 0.85, tessellation: 8 }, scene);
   spinner.rotation.x = -Math.PI / 2;
   spinner.position.z = -0.3;
   spinner.material = navy;
   spinner.parent = propeller;
 
-  const blades = MeshBuilder.CreateBox("plane-blades", { width: 0.2, height: 3.1, depth: 0.09 }, scene);
+  const blades = CreateBox("plane-blades", { width: 0.2, height: 3.1, depth: 0.09 }, scene);
   blades.material = charcoal;
   blades.parent = propeller;
 
-  const propDisc = MeshBuilder.CreateDisc("plane-prop-disc", { radius: 1.62, tessellation: 24 }, scene);
+  const propDisc = CreateDisc("plane-prop-disc", { radius: 1.62, tessellation: 24 }, scene);
   const discMaterial = new StandardMaterial("plane-prop-disc-material", scene);
   discMaterial.emissiveColor = new Color3(0.85, 0.88, 0.92);
   discMaterial.disableLighting = true;
@@ -135,7 +138,7 @@ function buildPlane(scene: Scene): PlayerPlane {
     wing.material = white;
     wing.parent = root;
 
-    const tip = MeshBuilder.CreateSphere(`plane-wingtip-${side}`, { diameterX: 0.5, diameterY: 0.16, diameterZ: 1.5, segments: 6 }, scene);
+    const tip = CreateSphere(`plane-wingtip-${side}`, { diameterX: 0.5, diameterY: 0.16, diameterZ: 1.5, segments: 6 }, scene);
     tip.position.set(side * 4.66, 0.13, -0.5);
     tip.material = red;
     tip.parent = root;
@@ -147,12 +150,12 @@ function buildPlane(scene: Scene): PlayerPlane {
     tail.parent = root;
 
     // Fixed gear with wheel spats under the wings.
-    const spat = MeshBuilder.CreateSphere(`plane-spat-${side}`, { diameterX: 0.42, diameterY: 0.85, diameterZ: 1.05, segments: 6 }, scene);
+    const spat = CreateSphere(`plane-spat-${side}`, { diameterX: 0.42, diameterY: 0.85, diameterZ: 1.05, segments: 6 }, scene);
     spat.position.set(side * 1.55, -0.92, -0.85);
     spat.material = navy;
     spat.parent = root;
 
-    const wheel = MeshBuilder.CreateSphere(`plane-wheel-${side}`, { diameter: 0.34, segments: 6 }, scene);
+    const wheel = CreateSphere(`plane-wheel-${side}`, { diameter: 0.34, segments: 6 }, scene);
     wheel.position.set(side * 1.55, -1.3, -0.85);
     wheel.material = charcoal;
     wheel.parent = root;
@@ -165,7 +168,7 @@ function buildPlane(scene: Scene): PlayerPlane {
   fin.material = navy;
   fin.parent = root;
 
-  const canopy = MeshBuilder.CreateSphere("plane-canopy-bubble", { diameterX: 0.7, diameterY: 0.55, diameterZ: 2.1, segments: 8 }, scene);
+  const canopy = CreateSphere("plane-canopy-bubble", { diameterX: 0.7, diameterY: 0.55, diameterZ: 2.1, segments: 8 }, scene);
   canopy.position.set(0, 0.58, -1.5);
   canopy.material = glass;
   canopy.parent = root;
@@ -184,20 +187,20 @@ function createTerrain(scene: Scene): TransformNode {
   // nearest 500 of the plane's z there is always ground underfoot and
   // ~1200 units ahead.
   for (let i = 0; i < 4; i += 1) {
-    const ground = MeshBuilder.CreateGround(`ground-${i}`, { width: 640, height: 520, subdivisions: 12 }, scene);
+    const ground = CreateGround(`ground-${i}`, { width: 640, height: 520, subdivisions: 12 }, scene);
     ground.position.z = 500 - i * 500;
     ground.material = groundMaterial;
     ground.parent = root;
   }
 
-  const river = MeshBuilder.CreateGround("river", { width: 28, height: 2200, subdivisions: 2 }, scene);
+  const river = CreateGround("river", { width: 28, height: 2200, subdivisions: 2 }, scene);
   river.position.x = -52;
   river.position.y = TERRAIN_STRIP_SURFACE_Y;
   river.position.z = -760;
   river.material = riverMaterial;
   river.parent = root;
 
-  const path = MeshBuilder.CreateGround("distant-course-path", { width: 18, height: 2200, subdivisions: 2 }, scene);
+  const path = CreateGround("distant-course-path", { width: 18, height: 2200, subdivisions: 2 }, scene);
   path.position.x = 42;
   path.position.y = TERRAIN_STRIP_SURFACE_Y;
   path.position.z = -760;
@@ -263,14 +266,14 @@ function createGate(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette):
     ["top", obstacle.height / 2],
     ["bottom", -obstacle.height / 2],
   ] as const) {
-    const bar = MeshBuilder.CreateBox(`${obstacle.id}-${name}`, { width: obstacle.width, height: rail, depth: rail }, scene);
+    const bar = CreateBox(`${obstacle.id}-${name}`, { width: obstacle.width, height: rail, depth: rail }, scene);
     bar.position.y = y;
     bar.material = palette.gate;
     bar.parent = root;
   }
   for (const sideX of [-obstacle.width / 2, obstacle.width / 2]) {
     for (let segment = 0; segment < 3; segment += 1) {
-      const upright = MeshBuilder.CreateBox(
+      const upright = CreateBox(
         `${obstacle.id}-side-${sideX}-${segment}`,
         { width: rail, height: sideSegment + 0.05, depth: rail },
         scene,
@@ -281,7 +284,7 @@ function createGate(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette):
       upright.parent = root;
     }
     for (const cornerY of [-obstacle.height / 2, obstacle.height / 2]) {
-      const corner = MeshBuilder.CreateBox(`${obstacle.id}-corner-${sideX}-${cornerY}`, { size: 1.7 }, scene);
+      const corner = CreateBox(`${obstacle.id}-corner-${sideX}-${cornerY}`, { size: 1.7 }, scene);
       corner.position.set(sideX, cornerY, 0);
       corner.material = palette.accent;
       corner.parent = root;
@@ -292,7 +295,7 @@ function createGate(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette):
   const legHeight = obstacle.position.y - obstacle.height / 2;
   if (legHeight > 1) {
     for (const sideX of [-obstacle.width / 2, obstacle.width / 2]) {
-      const leg = MeshBuilder.CreateBox(`${obstacle.id}-leg-${sideX}`, { width: 0.55, height: legHeight, depth: 0.55 }, scene);
+      const leg = CreateBox(`${obstacle.id}-leg-${sideX}`, { width: 0.55, height: legHeight, depth: 0.55 }, scene);
       leg.position.x = sideX;
       leg.position.y = -obstacle.height / 2 - legHeight / 2;
       leg.material = palette.steel;
@@ -309,7 +312,7 @@ function createTunnel(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette
   // Open-ended elliptical pipe you actually fly through: faceted orange
   // shell outside, dark bore inside, amber rims at the mouths, and ribs
   // along the barrel like a segmented pipe.
-  const shell = MeshBuilder.CreateCylinder(
+  const shell = CreateCylinder(
     `${obstacle.id}-shell`,
     { diameter: obstacle.width, height: obstacle.depth, tessellation: 22, cap: Mesh.NO_CAP },
     scene,
@@ -320,7 +323,7 @@ function createTunnel(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette
   shell.material = palette.tunnel;
   shell.parent = root;
 
-  const bore = MeshBuilder.CreateCylinder(
+  const bore = CreateCylinder(
     `${obstacle.id}-bore`,
     { diameter: obstacle.width * 0.985, height: obstacle.depth, tessellation: 22, cap: Mesh.NO_CAP, sideOrientation: Mesh.BACKSIDE },
     scene,
@@ -331,7 +334,7 @@ function createTunnel(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette
   bore.parent = root;
 
   for (const end of [-1, 1]) {
-    const rim = MeshBuilder.CreateTorus(`${obstacle.id}-rim-${end}`, { diameter: obstacle.width + 0.8, thickness: 1.5, tessellation: 36 }, scene);
+    const rim = CreateTorus(`${obstacle.id}-rim-${end}`, { diameter: obstacle.width + 0.8, thickness: 1.5, tessellation: 36 }, scene);
     // Torus hole faces +y by default; turn it to face down the flight axis.
     rim.rotation.x = Math.PI / 2;
     rim.scaling.z = ellipse;
@@ -339,7 +342,7 @@ function createTunnel(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette
     rim.material = palette.tunnelRim;
     rim.parent = root;
 
-    const rib = MeshBuilder.CreateTorus(`${obstacle.id}-rib-${end}`, { diameter: obstacle.width + 0.5, thickness: 0.7, tessellation: 30 }, scene);
+    const rib = CreateTorus(`${obstacle.id}-rib-${end}`, { diameter: obstacle.width + 0.5, thickness: 0.7, tessellation: 30 }, scene);
     rib.rotation.x = Math.PI / 2;
     rib.scaling.z = ellipse;
     rib.position.z = end * (obstacle.depth / 6);
@@ -360,21 +363,21 @@ function createBridge(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette
   const towerTop = deckTop + BRIDGE_TOWER_RISE;
   const groundY = -obstacle.position.y;
 
-  const deck = MeshBuilder.CreateBox(`${obstacle.id}-deck`, { width: obstacle.width, height: obstacle.height, depth: obstacle.depth }, scene);
+  const deck = CreateBox(`${obstacle.id}-deck`, { width: obstacle.width, height: obstacle.height, depth: obstacle.depth }, scene);
   deck.material = palette.stone;
   deck.parent = root;
 
   // Road surface with a painted center line and low railings.
-  const roadway = MeshBuilder.CreateBox(`${obstacle.id}-roadway`, { width: obstacle.width - 0.8, height: 0.3, depth: obstacle.depth - 1.2 }, scene);
+  const roadway = CreateBox(`${obstacle.id}-roadway`, { width: obstacle.width - 0.8, height: 0.3, depth: obstacle.depth - 1.2 }, scene);
   roadway.position.y = deckTop + 0.15;
   roadway.material = palette.asphalt;
   roadway.parent = root;
-  const line = MeshBuilder.CreateBox(`${obstacle.id}-line`, { width: obstacle.width - 2.5, height: 0.08, depth: 0.5 }, scene);
+  const line = CreateBox(`${obstacle.id}-line`, { width: obstacle.width - 2.5, height: 0.08, depth: 0.5 }, scene);
   line.position.y = deckTop + 0.32;
   line.material = palette.roadLine;
   line.parent = root;
   for (const side of [-1, 1]) {
-    const railing = MeshBuilder.CreateBox(`${obstacle.id}-railing-${side}`, { width: obstacle.width, height: 0.5, depth: 0.3 }, scene);
+    const railing = CreateBox(`${obstacle.id}-railing-${side}`, { width: obstacle.width, height: 0.5, depth: 0.3 }, scene);
     railing.position.set(0, deckTop + 0.5, side * (obstacle.depth / 2 - 0.3));
     railing.material = palette.accent;
     railing.parent = root;
@@ -384,18 +387,18 @@ function createBridge(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette
   // collision column spans the same footprint from ground to top.
   for (const side of [-1, 1]) {
     const baseHeight = deckTop + 2 - groundY;
-    const base = MeshBuilder.CreateBox(`${obstacle.id}-tower-base-${side}`, { width: BRIDGE_TOWER_HALF_WIDTH * 2, height: baseHeight, depth: obstacle.depth }, scene);
+    const base = CreateBox(`${obstacle.id}-tower-base-${side}`, { width: BRIDGE_TOWER_HALF_WIDTH * 2, height: baseHeight, depth: obstacle.depth }, scene);
     base.position.set(side * towerX, groundY + baseHeight / 2, 0);
     base.material = palette.stone;
     base.parent = root;
 
     const columnHeight = towerTop - (deckTop + 2);
-    const column = MeshBuilder.CreateBox(`${obstacle.id}-tower-${side}`, { width: 2.4, height: columnHeight, depth: obstacle.depth * 0.8 }, scene);
+    const column = CreateBox(`${obstacle.id}-tower-${side}`, { width: 2.4, height: columnHeight, depth: obstacle.depth * 0.8 }, scene);
     column.position.set(side * towerX, deckTop + 2 + columnHeight / 2, 0);
     column.material = palette.stone;
     column.parent = root;
 
-    const cap = MeshBuilder.CreateBox(`${obstacle.id}-tower-cap-${side}`, { width: 3.3, height: 0.8, depth: obstacle.depth * 0.9 }, scene);
+    const cap = CreateBox(`${obstacle.id}-tower-cap-${side}`, { width: 3.3, height: 0.8, depth: obstacle.depth * 0.9 }, scene);
     cap.position.set(side * towerX, towerTop + 0.4, 0);
     cap.material = palette.accent;
     cap.parent = root;
@@ -414,7 +417,7 @@ function createBridge(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette
       path.push(new Vector3(-towerX + 2 * towerX * t, towerTop - sag * 4 * t * (1 - t), cableZ));
     }
     path.push(new Vector3(anchorX, groundY + 1.4, cableZ));
-    const cable = MeshBuilder.CreateTube(`${obstacle.id}-cable-${face}`, { path, radius: 0.24, tessellation: 6 }, scene);
+    const cable = CreateTube(`${obstacle.id}-cable-${face}`, { path, radius: 0.24, tessellation: 6 }, scene);
     cable.material = palette.accent;
     cable.parent = root;
 
@@ -425,7 +428,7 @@ function createBridge(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette
       const hangerTop = cableY;
       const hangerBottom = deckTop + 0.45;
       if (hangerTop - hangerBottom < 0.6) continue;
-      const hanger = MeshBuilder.CreateBox(
+      const hanger = CreateBox(
         `${obstacle.id}-hanger-${face}-${i}`,
         { width: 0.14, height: hangerTop - hangerBottom, depth: 0.14 },
         scene,
@@ -438,7 +441,7 @@ function createBridge(scene: Scene, obstacle: Obstacle, palette: ObstaclePalette
 
   // Anchor blocks where the cables meet the ground.
   for (const side of [-1, 1]) {
-    const anchor = MeshBuilder.CreateBox(`${obstacle.id}-anchor-${side}`, { width: 2.6, height: 2.2, depth: obstacle.depth * 0.55 }, scene);
+    const anchor = CreateBox(`${obstacle.id}-anchor-${side}`, { width: 2.6, height: 2.2, depth: obstacle.depth * 0.55 }, scene);
     anchor.position.set(side * anchorX, groundY + 1.1, 0);
     anchor.material = palette.stone;
     anchor.parent = root;
@@ -461,7 +464,7 @@ function createClouds(scene: Scene): Mesh[] {
     return value - Math.floor(value);
   };
   for (let i = 0; i < 14; i += 1) {
-    const puff = MeshBuilder.CreateSphere(`cloud-${i}`, { diameter: 15 + seededOffset(i, 1) * 14, segments: 6 }, scene);
+    const puff = CreateSphere(`cloud-${i}`, { diameter: 15 + seededOffset(i, 1) * 14, segments: 6 }, scene);
     puff.scaling.y = 0.32;
     puff.material = material;
     puff.position.set(
@@ -481,7 +484,7 @@ function createMountain(scene: Scene, obstacle: Obstacle, palette: ObstaclePalet
 
   // Faceted rock cone with a per-peak twist and squashed footprint so no
   // two mountains read identical; collision stays the analytic cone.
-  const body = MeshBuilder.CreateCylinder(
+  const body = CreateCylinder(
     `${obstacle.id}-cone`,
     { diameterTop: 0, diameterBottom: obstacle.width, height: obstacle.height, tessellation: 7 },
     scene,
@@ -494,7 +497,7 @@ function createMountain(scene: Scene, obstacle: Obstacle, palette: ObstaclePalet
   body.parent = root;
 
   // Mossy foothill skirt grounds the peak in the terrain.
-  const skirt = MeshBuilder.CreateCylinder(
+  const skirt = CreateCylinder(
     `${obstacle.id}-skirt`,
     { diameterTop: obstacle.width * 0.75, diameterBottom: obstacle.width * 1.5, height: obstacle.height * 0.16, tessellation: 7 },
     scene,
@@ -509,7 +512,7 @@ function createMountain(scene: Scene, obstacle: Obstacle, palette: ObstaclePalet
   // Snow cap on the tall peaks only.
   if (obstacle.height > 26) {
     const capHeight = obstacle.height * 0.3;
-    const cap = MeshBuilder.CreateCylinder(
+    const cap = CreateCylinder(
       `${obstacle.id}-snow`,
       { diameterTop: 0, diameterBottom: (obstacle.width * capHeight) / obstacle.height + 1.2, height: capHeight, tessellation: 7 },
       scene,
@@ -569,12 +572,12 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
   shadowMaterial.alpha = 0.3;
   shadowMaterial.backFaceCulling = false;
   const shadowRoot = new TransformNode("plane-shadow-root", scene);
-  const wingShadow = MeshBuilder.CreateDisc("plane-shadow-wing", { radius: 1, tessellation: 18 }, scene);
+  const wingShadow = CreateDisc("plane-shadow-wing", { radius: 1, tessellation: 18 }, scene);
   wingShadow.rotation.x = Math.PI / 2;
   wingShadow.scaling.set(5.6, 1.35, 1);
   wingShadow.material = shadowMaterial;
   wingShadow.parent = shadowRoot;
-  const bodyShadow = MeshBuilder.CreateDisc("plane-shadow-body", { radius: 1, tessellation: 18 }, scene);
+  const bodyShadow = CreateDisc("plane-shadow-body", { radius: 1, tessellation: 18 }, scene);
   bodyShadow.rotation.x = Math.PI / 2;
   bodyShadow.scaling.set(0.95, 4.4, 1);
   bodyShadow.position.y = 0.012;
@@ -607,12 +610,12 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
   const debris: DebrisPiece[] = [];
   for (let i = 0; i < 14; i += 1) {
     const size = 0.6 + (i % 4) * 0.28;
-    const mesh = MeshBuilder.CreateSphere(`debris-${i}`, { diameter: size, segments: 4 }, scene);
+    const mesh = CreateSphere(`debris-${i}`, { diameter: size, segments: 4 }, scene);
     mesh.material = i % 3 === 0 ? smokeMaterial : fireMaterial;
     mesh.setEnabled(false);
     debris.push({ mesh, velocity: new Vector3(), size });
   }
-  const flash = MeshBuilder.CreateSphere("explosion-flash-sphere", { diameter: 5, segments: 8 }, scene);
+  const flash = CreateSphere("explosion-flash-sphere", { diameter: 5, segments: 8 }, scene);
   flash.material = flashMaterial;
   flash.setEnabled(false);
   let explosionAge = -1;
@@ -645,7 +648,7 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
   let elapsed = 0;
 
   // Bobbing chevron above the next gate/tunnel opening.
-  const marker = MeshBuilder.CreateCylinder("next-marker", { diameterTop: 3.6, diameterBottom: 0, height: 2.2, tessellation: 4 }, scene);
+  const marker = CreateCylinder("next-marker", { diameterTop: 3.6, diameterBottom: 0, height: 2.2, tessellation: 4 }, scene);
   marker.scaling.z = 0.4;
   const markerMaterial = new StandardMaterial("next-marker-material", scene);
   markerMaterial.diffuseColor = new Color3(0.5, 0.4, 0.05);
@@ -667,15 +670,15 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
   const createBalloonMeshes = (id: string, kind: string, radius: number): BalloonMeshes => {
     const root = new TransformNode(`${id}-root`, scene);
     const material = kind === "repair" ? balloonGreen : balloonGold;
-    const envelope = MeshBuilder.CreateSphere(`${id}-envelope`, { diameter: radius * 2, segments: 10 }, scene);
+    const envelope = CreateSphere(`${id}-envelope`, { diameter: radius * 2, segments: 10 }, scene);
     envelope.scaling.y = 1.16;
     envelope.material = material;
     envelope.parent = root;
-    const knot = MeshBuilder.CreateCylinder(`${id}-knot`, { diameterTop: 0.7, diameterBottom: 0.2, height: 0.8, tessellation: 6 }, scene);
+    const knot = CreateCylinder(`${id}-knot`, { diameterTop: 0.7, diameterBottom: 0.2, height: 0.8, tessellation: 6 }, scene);
     knot.position.y = -radius * 1.16 - 0.3;
     knot.material = material;
     knot.parent = root;
-    const string = MeshBuilder.CreateBox(`${id}-string`, { width: 0.08, height: 5, depth: 0.08 }, scene);
+    const string = CreateBox(`${id}-string`, { width: 0.08, height: 5, depth: 0.08 }, scene);
     string.position.y = -radius * 1.16 - 3.2;
     string.material = palette.steel;
     string.parent = root;
@@ -688,7 +691,7 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
   tracerMaterial.disableLighting = true;
   const tracers: Mesh[] = [];
   for (let i = 0; i < 10; i += 1) {
-    const tracer = MeshBuilder.CreateSphere(`tracer-${i}`, { diameter: 0.8, segments: 6 }, scene);
+    const tracer = CreateSphere(`tracer-${i}`, { diameter: 0.8, segments: 6 }, scene);
     tracer.scaling.z = 3.2;
     tracer.material = tracerMaterial;
     tracer.setEnabled(false);
@@ -706,7 +709,7 @@ export async function createHandFlyScene(canvas: HTMLCanvasElement): Promise<Han
     const material = new StandardMaterial(`pop-flash-${i}`, scene);
     material.disableLighting = true;
     material.alpha = 0;
-    const mesh = MeshBuilder.CreateSphere(`pop-flash-${i}`, { diameter: 6, segments: 8 }, scene);
+    const mesh = CreateSphere(`pop-flash-${i}`, { diameter: 6, segments: 8 }, scene);
     mesh.material = material;
     mesh.setEnabled(false);
     popFlashes.push({ mesh, material, age: -1 });

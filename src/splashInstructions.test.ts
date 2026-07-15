@@ -6,6 +6,18 @@ function splashMarkup(): string {
 }
 
 describe("splash screen instructions", () => {
+  test("keeps mode choices inert until the game is ready", () => {
+    const markup = splashMarkup();
+
+    expect(markup).toContain('data-handfly-startup="loading"');
+    expect(markup).toContain('id="menu-status"');
+    expect(markup).toContain("Loading flight systems…");
+    expect(markup).toMatch(/id="practice-btn"[^>]*disabled/);
+    expect(markup).toMatch(/id="gallery-btn"[^>]*disabled/);
+    expect(markup).toMatch(/id="start-btn"[^>]*disabled/);
+    expect(markup).toContain("Game failed to load. Reload the page or try an updated browser.");
+  });
+
   test("describe the current fixed-neutral hand controls and modes", () => {
     const markup = splashMarkup();
 
